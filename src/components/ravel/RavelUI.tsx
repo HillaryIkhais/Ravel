@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Bug, CheckCircle, XCircle, DollarSign, Trophy,
+  Bug, CheckCircle, XCircle, Trophy,
   ArrowRight, RotateCcw, ShieldX, Target, Crosshair, Sun, Moon,
 } from 'lucide-react';
 import { verifyReplayHtml } from '@/lib/ravel/verifier';
@@ -314,16 +314,10 @@ export function RavelUI() {
           </div>
           <div className="flex items-center gap-4">
             {session && (
-              <>
-                <div className="flex items-center gap-1.5 text-xs font-mono" style={{ color: dk ? '#C8A882' : '#8B7355' }}>
-                  <Trophy className="w-3.5 h-3.5" />
-                  <span>{session.totalXp} XP</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs font-mono" style={{ color: dk ? '#C8A882' : '#8B7355' }}>
-                  <DollarSign className="w-3.5 h-3.5" />
-                  <span>${session.totalEarned.toFixed(2)}</span>
-                </div>
-              </>
+              <div className="flex items-center gap-1.5 text-xs font-mono" style={{ color: dk ? '#C8A882' : '#8B7355' }}>
+                <Trophy className="w-3.5 h-3.5" />
+                <span>{session.totalXp} XP</span>
+              </div>
             )}
             <button
               onClick={() => setTheme(d => d === 'dark' ? 'light' : 'dark')}
@@ -342,69 +336,35 @@ export function RavelUI() {
         {!session ? (
           /* ── LANDING ── */
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <div className="min-h-[80vh] flex flex-col items-center justify-center text-center">
-              {/* Label */}
-              <div className="text-[10px] tracking-[0.25em] uppercase mb-6 font-mono" style={{ color: 'var(--muted)' }}>
-                RAVEL // competitive AI build
-              </div>
-
+            <div className="min-h-[85vh] flex flex-col items-center justify-center text-center">
               {/* Headline */}
-              <h1 className="font-editorial text-5xl sm:text-6xl md:text-7xl leading-[1.05] tracking-tight max-w-3xl mb-6">
-                While AI builds,<br />break what it creates.
+              <h1 className="font-editorial text-5xl sm:text-6xl md:text-7xl leading-[1.05] tracking-tight max-w-3xl mb-4">
+                While AI builds,<br />you try to break it.
               </h1>
 
               {/* Subtitle */}
-              <p className="text-base sm:text-lg max-w-xl mb-10 leading-relaxed" style={{ color: 'var(--muted)' }}>
-                Your hunt becomes the test that shapes what AI builds next.
-                Find bugs, prove them, force the fix.
+              <p className="text-lg sm:text-xl max-w-lg mb-10" style={{ color: 'var(--muted)' }}>
+                The AI gets better. You get harder.
               </p>
 
-              {/* CTAs */}
-              <div className="flex flex-col items-center gap-4 w-full max-w-md">
-                <button
-                  onClick={launchDemo}
-                  className="w-full py-4 px-8 text-sm font-medium tracking-wide rounded-full transition-all"
-                  style={{
-                    background: dk ? '#F5F5F5' : '#111',
-                    color: dk ? '#0A0A0A' : '#F8F6F3',
-                  }}
-                >
-                  Launch demo
-                </button>
+              {/* CTA */}
+              <button
+                onClick={launchDemo}
+                className="group relative px-10 py-5 text-base font-medium tracking-wide rounded-full transition-all"
+                style={{
+                  background: dk ? '#F5F5F5' : '#111',
+                  color: dk ? '#0A0A0A' : '#F8F6F3',
+                }}
+              >
+                <span className="relative z-10">BREAK IT</span>
+              </button>
 
-                <div className="w-full flex gap-2">
-                  <input
-                    type="text"
-                    value={gameTitle}
-                    onChange={e => setGameTitle(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleStart()}
-                    placeholder="Or describe any game for AI to build..."
-                    className="flex-1 px-4 py-3 text-sm rounded-full outline-none transition-all"
-                    style={{
-                      background: dk ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                      border: `1px solid var(--border)`,
-                      color: 'var(--fg)',
-                    }}
-                  />
-                  <button
-                    onClick={handleStart}
-                    disabled={!gameTitle.trim()}
-                    className="px-5 py-3 text-sm font-medium rounded-full transition-all disabled:opacity-30"
-                    style={{
-                      background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-                    }}
-                  >
-                    Build
-                  </button>
-                </div>
-              </div>
-
-              {/* Demo preview strip */}
-              <div className="mt-12 grid grid-cols-2 gap-6 max-w-lg w-full text-left">
+              {/* Preview strip */}
+              <div className="mt-16 grid grid-cols-2 gap-8 max-w-md w-full text-left">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full animate-slowpulse" style={{ background: dk ? '#C8A882' : '#8B7355' }} />
-                    <span className="text-[11px] font-mono tracking-wider uppercase" style={{ color: 'var(--muted)' }}>AI is building</span>
+                    <span className="text-[10px] font-mono tracking-[0.2em] uppercase" style={{ color: 'var(--muted)' }}>AI building</span>
                   </div>
                   <div className="text-sm font-mono" style={{ color: dk ? '#C8A882' : '#8B7355' }}>v{nextVersion}</div>
                   <div className="w-full h-px rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
@@ -414,10 +374,37 @@ export function RavelUI() {
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <Crosshair className="w-3.5 h-3.5" style={{ color: 'var(--muted)' }} />
-                    <span className="text-[11px] font-mono tracking-wider uppercase" style={{ color: 'var(--muted)' }}>You&apos;re hunting</span>
+                    <span className="text-[10px] font-mono tracking-[0.2em] uppercase" style={{ color: 'var(--muted)' }}>You hunting</span>
                   </div>
                   <div className="text-sm font-mono" style={{ color: 'var(--fg)' }}>v{landingVersion}</div>
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>Break the enemy targeting system.</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>Break the enemy targeting.</p>
+                </div>
+              </div>
+
+              {/* Secondary: custom game */}
+              <div className="mt-8 flex flex-col items-center gap-2">
+                <div className="w-full flex gap-2 max-w-sm">
+                  <input
+                    type="text"
+                    value={gameTitle}
+                    onChange={e => setGameTitle(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleStart()}
+                    placeholder="Or describe any game for AI to build..."
+                    className="flex-1 px-4 py-2.5 text-sm rounded-full outline-none transition-all"
+                    style={{
+                      background: dk ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                      border: `1px solid var(--border)`,
+                      color: 'var(--fg)',
+                    }}
+                  />
+                  <button
+                    onClick={handleStart}
+                    disabled={!gameTitle.trim()}
+                    className="px-4 py-2.5 text-sm font-medium rounded-full transition-all disabled:opacity-30"
+                    style={{ background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}
+                  >
+                    Build
+                  </button>
                 </div>
               </div>
             </div>
@@ -498,8 +485,8 @@ export function RavelUI() {
                     <div className="flex items-center gap-3 mb-4">
                       <CheckCircle className="w-6 h-6" style={{ color: dk ? '#C8A882' : '#8B7355' }} />
                       <div>
-                        <div className="font-editorial text-2xl" style={{ color: dk ? '#C8A882' : '#8B7355' }}>Verified</div>
-                        <div className="text-xs" style={{ color: 'var(--muted)' }}>Your hunt found a reproducible failure.</div>
+                        <div className="font-editorial text-2xl" style={{ color: dk ? '#C8A882' : '#8B7355' }}>You found it.</div>
+                        <div className="text-xs" style={{ color: 'var(--muted)' }}>Trace captured &mdash; {pendingEventCount} events</div>
                       </div>
                     </div>
 
@@ -521,10 +508,7 @@ export function RavelUI() {
                     </div>
 
                     <div className="flex items-center justify-between rounded-lg px-4 py-3" style={{ background: dk ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', border: `1px solid var(--border)` }}>
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-mono font-bold" style={{ color: dk ? '#C8A882' : '#8B7355' }}>+{reward.xp} XP</span>
-                        <span className="text-sm font-mono font-bold" style={{ color: dk ? '#C8A882' : '#8B7355' }}>${reward.bounty.toFixed(2)}</span>
-                      </div>
+                      <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>AI is rebuilding</span>
                       <button onClick={handleNextHunt} className="px-5 py-2 rounded-full text-xs font-medium flex items-center gap-2 transition-all" style={{ background: dk ? '#F5F5F5' : '#111', color: dk ? '#0A0A0A' : '#F8F6F3' }}>
                         NEXT HUNT <ArrowRight className="w-3 h-3" />
                       </button>
@@ -600,7 +584,6 @@ export function RavelUI() {
                   <p className="text-xs mb-3 leading-relaxed" style={{ color: 'var(--muted)' }}>{currentHunt.objective}</p>
                   <div className="flex items-center gap-3 text-xs">
                     <span className="px-2 py-0.5 rounded-full" style={{ background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>{currentHunt.difficulty}</span>
-                    <span className="font-mono" style={{ color: dk ? '#C8A882' : '#8B7355' }}>${Number(currentHunt.reward).toFixed(2)}</span>
                   </div>
                   {currentHunt.oracle && (
                     <div className="mt-3 p-2 rounded-lg" style={{ background: dk ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.03)', border: `1px solid var(--border)` }}>
@@ -618,8 +601,8 @@ export function RavelUI() {
                   <li>Play v{session.currentVersion} while AI builds v{nextVersion}.</li>
                   <li>Trigger the failure &mdash; your input becomes the trace.</li>
                   <li>Replay the <span style={{ color: 'var(--fg)' }}>same attack</span> on both builds.</li>
-                  <li>Oracle proves old fails + fix is positively present.</li>
-                  <li>Bounty only if both sides are machine-verified.</li>
+                  <li>Oracle proves old fails + fix is present.</li>
+                  <li>The AI&apos;s next build has to survive you.</li>
                 </ol>
               </div>
 

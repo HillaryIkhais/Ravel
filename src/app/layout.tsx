@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "RAVEL - Play While AI Builds",
-  description: "AI builds the next version while you play the current one. Your hunt becomes the test that shapes what AI builds next.",
+  description: "While AI builds, you try to break it. RAVEL turns the time between AI builds into a game of adversarial testing.",
 };
 
 export default function RootLayout({

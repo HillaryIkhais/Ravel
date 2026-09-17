@@ -2,12 +2,12 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Bug, CheckCircle, XCircle, Trophy,
+import { Bug, CheckCircle, XCircle, Trophy,
   ArrowRight, RotateCcw, ShieldX, Target, Crosshair, Sun, Moon, Zap, Terminal,
 } from 'lucide-react';
 import { verifyReplayHtml } from '@/lib/ravel/verifier';
 import { type OracleVerdict, type OracleCondition, type InputEvent } from '@/types/ravel';
+import { Scene3D } from './Scene3D';
 
 type Phase = 'idle' | 'hunting' | 'capturing' | 'patching' | 'verifying' | 'result' | 'refused';
 
@@ -71,14 +71,15 @@ export function RavelUI() {
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [cursorPos, setCursorPos] = useState({ x: -100, y: -100 });
   const [cursorHover, setCursorHover] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(true);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const recordedEvents = useRef<InputEvent[]>([]);
   const recordingHandlerRef = useRef<(() => void) | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const traceIdRef = useRef<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const mouseRef = useRef({ x: -1000, y: -1000 });
+  const tiltRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -90,7 +91,9 @@ export function RavelUI() {
       setCursorPos({ x: e.clientX, y: e.clientY });
       const tx = (e.clientX / window.innerWidth - 0.5) * 12;
       const ty = (e.clientY / window.innerHeight - 0.5) * 12;
-      setTilt({ x: -ty, y: tx });
+      const newTilt = { x: -ty, y: tx };
+      setTilt(newTilt);
+      tiltRef.current = newTilt;
     };
     const onLeave = () => { mouseRef.current = { x: -1000, y: -1000 }; setCursorPos({ x: -100, y: -100 }); };
     window.addEventListener('mousemove', onMove);
@@ -123,11 +126,11 @@ export function RavelUI() {
     if (phase !== 'patching') return;
     let cancelled = false;
     const lines = [
-      '> Analyzing input trace...',
-      '> Reconstructing attack vector...',
-      '> Generating counter-measure...',
-      '> Patching build...',
-      '> Verifying integrity...',
+      '> Studying your attack...',
+      '> Understanding what you did...',
+      '> Building a defense...',
+      '> Rebuilding the game...',
+      '> Checking if it holds...',
     ];
     let i = 0;
     const id = setInterval(() => {
@@ -140,100 +143,6 @@ export function RavelUI() {
     }, 600);
     return () => { cancelled = true; clearInterval(id); };
   }, [phase]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let w = window.innerWidth;
-    let h = window.innerHeight;
-    canvas.width = w;
-    canvas.height = h;
-
-    const onResize = () => { w = window.innerWidth; h = window.innerHeight; canvas.width = w; canvas.height = h; };
-    window.addEventListener('resize', onResize);
-
-    interface P { x: number; y: number; vx: number; vy: number; r: number; baseAlpha: number; }
-    const ps: P[] = Array.from({ length: 80 }, () => ({
-      x: Math.random() * w, y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2,
-      r: Math.random() * 1.6 + 0.4,
-      baseAlpha: Math.random() * 0.15 + 0.08,
-    }));
-
-    let raf: number;
-    let frameCount = 0;
-    const draw = () => {
-      ctx.clearRect(0, 0, w, h);
-      const dark = document.documentElement.classList.contains('dark');
-      const lineBase = dark ? 255 : 0;
-      const mx = mouseRef.current.x;
-      const my = mouseRef.current.y;
-      frameCount++;
-
-      for (const p of ps) {
-        const dx = p.x - mx;
-        const dy = p.y - my;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const mouseRadius = 180;
-        if (dist < mouseRadius && dist > 0) {
-          const force = (1 - dist / mouseRadius) * 0.8;
-          p.vx += (dx / dist) * force;
-          p.vy += (dy / dist) * force;
-        }
-        p.vx *= 0.97;
-        p.vy *= 0.97;
-        p.vx += (Math.random() - 0.5) * 0.01;
-        p.vy += (Math.random() - 0.5) * 0.01;
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < -10) p.x = w + 10; if (p.x > w + 10) p.x = -10;
-        if (p.y < -10) p.y = h + 10; if (p.y > h + 10) p.y = -10;
-        const breathe = Math.sin(frameCount * 0.01 + p.x * 0.01) * 0.03;
-        const alpha = p.baseAlpha + breathe;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${lineBase},${lineBase},${lineBase},${Math.max(0.02, alpha)})`;
-        ctx.fill();
-      }
-
-      for (let i = 0; i < ps.length; i++) {
-        for (let j = i + 1; j < ps.length; j++) {
-          const dx = ps[i].x - ps[j].x;
-          const dy = ps[i].y - ps[j].y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < 120) {
-            const alpha = 0.04 * (1 - d / 120);
-            ctx.beginPath();
-            ctx.moveTo(ps[i].x, ps[i].y); ctx.lineTo(ps[j].x, ps[j].y);
-            ctx.strokeStyle = `rgba(${lineBase},${lineBase},${lineBase},${alpha})`;
-            ctx.lineWidth = 0.5; ctx.stroke();
-          }
-        }
-      }
-
-      if (mx > 0 && my > 0) {
-        for (const p of ps) {
-          const dx = p.x - mx;
-          const dy = p.y - my;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < 250 && d > 30) {
-            const alpha = 0.06 * (1 - d / 250);
-            ctx.beginPath();
-            ctx.moveTo(mx, my); ctx.lineTo(p.x, p.y);
-            const accent = dark ? '200,168,130' : '139,115,85';
-            ctx.strokeStyle = `rgba(${accent},${alpha})`;
-            ctx.lineWidth = 0.5; ctx.stroke();
-          }
-        }
-      }
-
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); };
-  }, [theme]);
 
   useEffect(() => {
     if (phase !== 'hunting' || !session) return;
@@ -339,7 +248,7 @@ export function RavelUI() {
     let attempt = attemptIn;
     let failureReason = lastFailureReason;
     while (attempt <= 3) {
-      setPhase('patching'); setPatchProgress(8); setCaptureMessage('AI IS STUDYING YOUR ATTACK'); setAttemptNo(attempt);
+      setPhase('patching'); setPatchProgress(8); setCaptureMessage('AI IS LEARNING FROM YOUR ATTACK...'); setAttemptNo(attempt);
       try {
         const pres = await fetch('/api/ravel/patch', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -409,25 +318,43 @@ export function RavelUI() {
 
   return (
     <div className="min-h-screen relative" style={{ background: 'var(--bg)', color: 'var(--fg)' }}>
-      <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }} />
+      <Scene3D dark={dk} phase={phase} />
 
       <header className="relative" style={{ zIndex: 10 }}>
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-editorial text-lg tracking-tight">RAVEL</span>
-            <span className="text-[11px] tracking-[0.15em] uppercase" style={{ color: 'var(--muted)' }}>play while AI builds</span>
+            <span className="text-[11px] tracking-[0.15em] uppercase" style={{ color: 'var(--muted)' }}>outsmart what AI builds</span>
           </div>
           <div className="flex items-center gap-4">
             {session && (
-              <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full"
-                style={{ background: dk ? 'rgba(200,168,130,0.08)' : 'rgba(139,115,85,0.08)', color: dk ? '#C8A882' : '#8B7355' }}>
-                <Trophy className="w-3.5 h-3.5" />
-                <span>{session.totalXp} XP</span>
-              </motion.div>
+              <>
+                <button
+                  onClick={() => { handleReset(); setShowInstructions(true); }}
+                  onMouseEnter={() => setCursorHover(true)}
+                  onMouseLeave={() => setCursorHover(false)}
+                  className="flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full transition-all"
+                  style={{
+                    background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--muted)',
+                  }}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  New Game
+                </button>
+                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full"
+                  style={{ background: dk ? 'rgba(200,168,130,0.08)' : 'rgba(139,115,85,0.08)', color: dk ? '#C8A882' : '#8B7355' }}>
+                  <Trophy className="w-3.5 h-3.5" />
+                  <span>{session.totalXp} XP</span>
+                </motion.div>
+              </>
             )}
             <button
               onClick={() => setTheme(d => d === 'dark' ? 'light' : 'dark')}
+              onMouseEnter={() => setCursorHover(true)}
+              onMouseLeave={() => setCursorHover(false)}
               className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
               style={{ background: dk ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}
               aria-label="Toggle theme"
@@ -451,8 +378,11 @@ export function RavelUI() {
                   filter: 'blur(40px)', opacity: 0.4,
                 }} />
               </div>
-              <p className="text-lg sm:text-xl max-w-lg mb-12" style={{ color: 'var(--muted)' }}>
-                It learns from every attack.
+              <p className="text-lg sm:text-xl max-w-xl mb-6" style={{ color: 'var(--muted)' }}>
+                The AI made this. Can you break it?
+              </p>
+              <p className="text-sm max-w-md mb-12 leading-relaxed" style={{ color: 'var(--muted)', opacity: 0.7 }}>
+                Every time you break its rules, it rebuilds itself to stop you. Your attack becomes the reason the next version changes.
               </p>
               <div className="relative group">
                 <div className="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{
@@ -463,6 +393,8 @@ export function RavelUI() {
                 }} />
                 <button
                   onClick={launchDemo}
+                  onMouseEnter={() => setCursorHover(true)}
+                  onMouseLeave={() => setCursorHover(false)}
                   className="relative px-12 py-5 text-base font-medium tracking-wide rounded-full transition-all duration-300"
                   style={{
                     background: dk ? '#F5F5F5' : '#111',
@@ -506,7 +438,7 @@ export function RavelUI() {
                     value={gameTitle}
                     onChange={e => setGameTitle(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleStart()}
-                    placeholder="Or describe any game for AI to build..."
+                    placeholder="Tell AI what game to build..."
                     className="flex-1 px-5 py-3 text-sm rounded-full outline-none transition-all duration-300 focus:ring-2"
                     style={{
                       background: dk ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
@@ -558,7 +490,9 @@ export function RavelUI() {
                   boxShadow: building
                     ? `0 0 30px ${dk ? 'rgba(200,168,130,0.1)' : 'rgba(139,115,85,0.08)'}, 0 0 60px ${dk ? 'rgba(200,168,130,0.05)' : 'rgba(139,115,85,0.04)'}`
                     : 'none',
-                  transition: 'box-shadow 0.5s ease, border-color 0.5s ease',
+                  transform: `perspective(1200px) rotateX(${tilt.x * 0.5}deg) rotateY(${tilt.y * 0.5}deg)`,
+                  transition: 'transform 0.15s ease-out, box-shadow 0.5s ease, border-color 0.5s ease',
+                  transformStyle: 'preserve-3d',
                 }}>
                 {building ? (
                   <div className="h-[480px] flex flex-col items-center justify-center relative overflow-hidden">
@@ -601,6 +535,37 @@ export function RavelUI() {
                 )}
               </div>
 
+              {/* Instructions overlay */}
+              <AnimatePresence>
+                {phase === 'hunting' && showInstructions && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                    className="rounded-xl p-6 mb-2"
+                    style={{
+                      background: dk ? 'rgba(200,168,130,0.04)' : 'rgba(139,115,85,0.04)',
+                      border: `1px solid ${dk ? 'rgba(200,168,130,0.12)' : 'rgba(139,115,85,0.1)'}`,
+                    }}>
+                    <h3 className="font-editorial text-lg mb-3" style={{ color: dk ? '#C8A882' : '#8B7355' }}>
+                      How to play
+                    </h3>
+                    <div className="space-y-2 text-sm" style={{ color: 'var(--muted)' }}>
+                      <p><strong style={{ color: 'var(--fg)' }}>1.</strong> Play the game above. Try different moves.</p>
+                      <p><strong style={{ color: 'var(--fg)' }}>2.</strong> When you see something wrong &mdash; a crash, wrong behavior, anything broken &mdash; click <span style={{ color: '#C06060', fontWeight: 600 }}>CAPTURE BUG</span> below.</p>
+                      <p><strong style={{ color: 'var(--fg)' }}>3.</strong> The system replays your exact input on both the old game and the AI&apos;s new version.</p>
+                      <p><strong style={{ color: 'var(--fg)' }}>4.</strong> If the old version fails and the fix is present in the new version &mdash; <strong style={{ color: dk ? '#C8A882' : '#8B7355' }}>you win XP</strong>. The AI learned from your attack.</p>
+                    </div>
+                    <button
+                      onClick={() => setShowInstructions(false)}
+                      onMouseEnter={() => setCursorHover(true)}
+                      onMouseLeave={() => setCursorHover(false)}
+                      className="mt-4 px-5 py-2 rounded-full text-xs font-medium transition-all"
+                      style={{ background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', color: 'var(--fg)' }}
+                    >
+                      Got it, let me play
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <AnimatePresence>
                 {phase === 'capturing' && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -625,6 +590,8 @@ export function RavelUI() {
               {phase === 'hunting' && (
                 <motion.button
                   onClick={handleCapture}
+                  onMouseEnter={() => setCursorHover(true)}
+                  onMouseLeave={() => setCursorHover(false)}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="w-full py-3.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 group"
@@ -682,7 +649,10 @@ export function RavelUI() {
                     </div>
                     <div className="flex items-center justify-between rounded-lg px-4 py-3" style={{ background: dk ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', border: '1px solid var(--border)' }}>
                       <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>Build {patchRound.newVersion} is ready</span>
-                      <button onClick={handleNextHunt} className="px-5 py-2 rounded-full text-xs font-medium flex items-center gap-2 transition-all" style={{ background: dk ? '#F5F5F5' : '#111', color: dk ? '#0A0A0A' : '#F8F6F3' }}>
+                      <button onClick={handleNextHunt}
+                        onMouseEnter={() => setCursorHover(true)}
+                        onMouseLeave={() => setCursorHover(false)}
+                        className="px-5 py-2 rounded-full text-xs font-medium flex items-center gap-2 transition-all" style={{ background: dk ? '#F5F5F5' : '#111', color: dk ? '#0A0A0A' : '#F8F6F3' }}>
                         BREAK IT AGAIN <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
@@ -737,7 +707,16 @@ export function RavelUI() {
               </div>
 
               {currentHunt && (phase === 'hunting' || phase === 'capturing' || building) && (
-                <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="rounded-xl p-4" style={{ background: dk ? 'rgba(200,168,130,0.04)' : 'rgba(139,115,85,0.04)', border: `1px solid ${dk ? 'rgba(200,168,130,0.1)' : 'rgba(139,115,85,0.08)'}` }}>
+                <motion.div initial={{ opacity: 0, x: 12, rotateY: -10 }} animate={{ opacity: 1, x: 0, rotateY: 0 }}
+                  transition={{ type: 'spring', stiffness: 120, damping: 15 }}
+                  className="rounded-xl p-4"
+                  style={{
+                    background: dk ? 'rgba(200,168,130,0.04)' : 'rgba(139,115,85,0.04)',
+                    border: `1px solid ${dk ? 'rgba(200,168,130,0.1)' : 'rgba(139,115,85,0.08)'}`,
+                    transform: `perspective(800px) rotateX(${tilt.x * 0.3}deg) rotateY(${tilt.y * 0.3}deg)`,
+                    transition: 'transform 0.2s ease-out',
+                    transformStyle: 'preserve-3d',
+                  }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Target className="w-4 h-4" style={{ color: dk ? '#C8A882' : '#8B7355' }} />
                     <span className="text-xs font-mono tracking-wider uppercase" style={{ color: dk ? '#C8A882' : '#8B7355' }}>HUNT {huntLabel}</span>
@@ -780,6 +759,25 @@ export function RavelUI() {
           </div>
         )}
       </main>
+
+      {/* Custom cursor */}
+      <div
+        className="pointer-events-none fixed z-[200]"
+        style={{
+          left: cursorPos.x,
+          top: cursorPos.y,
+          transform: 'translate(-50%, -50%)',
+          transition: 'width 0.2s, height 0.2s, border-color 0.2s, background 0.2s',
+          width: cursorHover ? 48 : 16,
+          height: cursorHover ? 48 : 16,
+          borderRadius: '50%',
+          border: `1.5px solid ${dk ? 'rgba(200,168,130,0.5)' : 'rgba(139,115,85,0.4)'}`,
+          background: cursorHover
+            ? (dk ? 'rgba(200,168,130,0.08)' : 'rgba(139,115,85,0.06)')
+            : 'transparent',
+          mixBlendMode: dk ? 'difference' : 'normal',
+        }}
+      />
     </div>
   );
 }

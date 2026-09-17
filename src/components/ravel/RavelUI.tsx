@@ -199,6 +199,15 @@ export function RavelUI() {
     } catch { setPhase('idle'); setRefusal('Demo failed to load.'); }
   }, [enterHunt]);
 
+  // Auto-start demo on mount
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoStarted.current && phase === 'idle') {
+      autoStarted.current = true;
+      void launchDemo();
+    }
+  }, [phase, launchDemo]);
+
   const launchGenerated = useCallback(async (title: string) => {
     setPhase('patching'); setPatchProgress(6);
     try {
@@ -232,14 +241,14 @@ export function RavelUI() {
     let attempt = attemptIn;
     let failureReason = lastFailureReason;
     while (attempt <= 3) {
-      setPhase('patching'); setPatchProgress(8); setCaptureMessage('AI IS PATCHING...'); setAttemptNo(attempt);
+      setPhase('patching'); setPatchProgress(8); setCaptureMessage('AI IS STUDYING YOUR ATTACK'); setAttemptNo(attempt);
       try {
         const pres = await fetch('/api/ravel/patch', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId: sessionIdRef.current, traceId, attempt, lastFailureReason: failureReason ?? null }),
         });
         if (!pres.ok) { const perr = await pres.json(); setRefusal(perr.reason || 'AI patch failed.'); setPhase('refused'); setCaptureMessage('NO PROOF, NO REWARD'); return; }
-        const pdata = await pres.json(); setPatchRound(pdata); setPhase('verifying'); setCaptureMessage('SAME ATTACK. VERIFYING BOTH BUILDS...');
+        const pdata = await pres.json(); setPatchRound(pdata); setPhase('verifying'); setCaptureMessage('REPLAYING YOUR ATTACK...');
         const [oldV, newV] = await Promise.all([verifyReplayHtml(pdata.oldReplayHtml, pdata.oldVersion), verifyReplayHtml(pdata.newReplayHtml, pdata.newVersion)]);
         setOldVerdict(oldV); setNewVerdict(newV);
         const vres = await fetch('/api/ravel/verify', {
@@ -253,7 +262,7 @@ export function RavelUI() {
           setSession(prev => prev ? { ...prev, currentVersion: vdata.newVersion, totalBuilds: prev.totalBuilds + 1, totalXp: prev.totalXp + vdata.decision.xp, totalEarned: prev.totalEarned + vdata.decision.bounty } : null);
           setPhase('result'); setPatchProgress(100); return;
         }
-        if (vdata.status === 'retry') { failureReason = vdata.decision.reason; attempt += 1; setCaptureMessage(`RETRY ${attempt}/3`); continue; }
+        if (vdata.status === 'retry') { failureReason = vdata.decision.reason; attempt += 1; setCaptureMessage(`YOUR ATTACK STILL WORKS. RETRY ${attempt}/3`); continue; }
         setRefusal(vdata.reason || 'Verification failed.'); setPhase('refused'); setCaptureMessage('NO PROOF, NO REWARD'); return;
       } catch { setRefusal('Patch/verify cycle failed.'); setPhase('refused'); setCaptureMessage('NO PROOF, NO REWARD'); return; }
     }
@@ -262,7 +271,7 @@ export function RavelUI() {
   const handleCapture = useCallback(async () => {
     if (!session || !currentHunt) return;
     stopRecording(); setPendingEventCount(recordedEvents.current.length);
-    setPhase('capturing'); setPatchProgress(4); setCaptureMessage('CAPTURING TRACE...');
+    setPhase('capturing'); setPatchProgress(4); setCaptureMessage('YOU BROKE IT.');
     setPatchRound(null); setOldVerdict(null); setNewVerdict(null); setReward(null); setRefusal('');
     try {
       const res = await fetch('/api/ravel/attack', {
@@ -339,12 +348,12 @@ export function RavelUI() {
             <div className="min-h-[85vh] flex flex-col items-center justify-center text-center">
               {/* Headline */}
               <h1 className="font-editorial text-5xl sm:text-6xl md:text-7xl leading-[1.05] tracking-tight max-w-3xl mb-4">
-                While AI builds,<br />you try to break it.
+                Break what AI built.
               </h1>
 
               {/* Subtitle */}
               <p className="text-lg sm:text-xl max-w-lg mb-10" style={{ color: 'var(--muted)' }}>
-                The AI gets better. You get harder.
+                It learns from every attack.
               </p>
 
               {/* CTA */}
@@ -485,8 +494,8 @@ export function RavelUI() {
                     <div className="flex items-center gap-3 mb-4">
                       <CheckCircle className="w-6 h-6" style={{ color: dk ? '#C8A882' : '#8B7355' }} />
                       <div>
-                        <div className="font-editorial text-2xl" style={{ color: dk ? '#C8A882' : '#8B7355' }}>You found it.</div>
-                        <div className="text-xs" style={{ color: 'var(--muted)' }}>Trace captured &mdash; {pendingEventCount} events</div>
+                        <div className="font-editorial text-2xl" style={{ color: dk ? '#C8A882' : '#8B7355' }}>The AI survived.</div>
+                        <div className="text-xs" style={{ color: 'var(--muted)' }}>Your attack was real. It adapted.</div>
                       </div>
                     </div>
 
@@ -495,22 +504,22 @@ export function RavelUI() {
                         <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: '#C06060' }}>v{patchRound.oldVersion}</div>
                         <div className="flex items-center gap-1.5">
                           {oldVerdict?.bugMet ? <CheckCircle className="w-3.5 h-3.5" style={{ color: '#C06060' }} /> : <XCircle className="w-3.5 h-3.5" style={{ color: 'var(--muted)' }} />}
-                          <span className="text-xs font-medium" style={{ color: '#C06060' }}>BUG CONFIRMED</span>
+                          <span className="text-xs font-medium" style={{ color: '#C06060' }}>YOU BROKE IT</span>
                         </div>
                       </div>
                       <div className="rounded-lg p-3" style={{ background: dk ? 'rgba(200,168,130,0.06)' : 'rgba(139,115,85,0.04)', border: `1px solid ${dk ? 'rgba(200,168,130,0.12)' : 'rgba(139,115,85,0.1)'}` }}>
                         <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: dk ? '#C8A882' : '#8B7355' }}>v{patchRound.newVersion}</div>
                         <div className="flex items-center gap-1.5">
                           {newVerdict?.fixedMet ? <CheckCircle className="w-3.5 h-3.5" style={{ color: dk ? '#C8A882' : '#8B7355' }} /> : <XCircle className="w-3.5 h-3.5" style={{ color: 'var(--muted)' }} />}
-                          <span className="text-xs font-medium" style={{ color: dk ? '#C8A882' : '#8B7355' }}>FIX VERIFIED</span>
+                          <span className="text-xs font-medium" style={{ color: dk ? '#C8A882' : '#8B7355' }}>AI COUNTERED</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between rounded-lg px-4 py-3" style={{ background: dk ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', border: `1px solid var(--border)` }}>
-                      <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>AI is rebuilding</span>
+                      <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>Build {patchRound.newVersion} is ready</span>
                       <button onClick={handleNextHunt} className="px-5 py-2 rounded-full text-xs font-medium flex items-center gap-2 transition-all" style={{ background: dk ? '#F5F5F5' : '#111', color: dk ? '#0A0A0A' : '#F8F6F3' }}>
-                        NEXT HUNT <ArrowRight className="w-3 h-3" />
+                        BREAK IT AGAIN <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
                   </div>

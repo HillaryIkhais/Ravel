@@ -10,6 +10,9 @@
   --surface: #EFECE7;
   --border: rgba(0, 0, 0, 0.07);
   --radius: 12px;
+  --glow: rgba(139, 115, 85, 0.15);
+  --danger: #C06060;
+  --danger-glow: rgba(192, 96, 96, 0.25);
 }
 
 .dark {
@@ -19,6 +22,8 @@
   --accent: #C8A882;
   --surface: #141414;
   --border: rgba(255, 255, 255, 0.06);
+  --glow: rgba(200, 168, 130, 0.12);
+  --danger-glow: rgba(192, 96, 96, 0.2);
 }
 
 body {
@@ -28,9 +33,9 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background 0.4s ease, color 0.4s ease;
+  overflow-x: hidden;
 }
 
-/* Serif headlines */
 .font-editorial {
   font-family: Georgia, "Times New Roman", "Iowan Old Style", "Palatino Linotype", ui-serif, serif;
 }
@@ -47,6 +52,181 @@ body {
 @keyframes blink { 0%,50% { opacity:1; } 51%,100% { opacity:0; } }
 .animate-blink { animation: blink 1s infinite; }
 
-/* Slow pulse for particles */
+/* Slow pulse */
 @keyframes slowpulse { 0%,100% { opacity:0.4; } 50% { opacity:0.8; } }
 .animate-slowpulse { animation: slowpulse 4s ease-in-out infinite; }
+
+/* ── SCAN LINES ── */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  z-index: 2;
+}
+.dark .scanlines::after {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.06) 2px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+}
+
+/* ── CRT VIGNETTE ── */
+.crt-vignette::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.25) 100%);
+  z-index: 1;
+}
+
+/* ── GLOW PULSE ── */
+@keyframes glowpulse {
+  0%, 100% { box-shadow: 0 0 15px var(--glow), 0 0 40px var(--glow), inset 0 0 20px rgba(0,0,0,0.1); }
+  50% { box-shadow: 0 0 25px var(--glow), 0 0 60px var(--glow), inset 0 0 30px rgba(0,0,0,0.15); }
+}
+.glow-border { animation: glowpulse 3s ease-in-out infinite; }
+
+/* ── DANGER GLOW ── */
+@keyframes dangerglow {
+  0%, 100% { box-shadow: 0 0 20px var(--danger-glow), 0 0 50px var(--danger-glow); }
+  50% { box-shadow: 0 0 35px var(--danger-glow), 0 0 80px var(--danger-glow); }
+}
+.danger-glow { animation: dangerglow 1.5s ease-in-out infinite; }
+
+/* ── SCREEN SHAKE ── */
+@keyframes screenshake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-4px, 2px) rotate(-0.5deg); }
+  20% { transform: translate(3px, -3px) rotate(0.3deg); }
+  30% { transform: translate(-2px, 4px) rotate(-0.2deg); }
+  40% { transform: translate(4px, -1px) rotate(0.4deg); }
+  50% { transform: translate(-3px, 2px) rotate(-0.3deg); }
+  60% { transform: translate(2px, -4px) rotate(0.2deg); }
+  70% { transform: translate(-1px, 3px) rotate(-0.1deg); }
+  80% { transform: translate(3px, -2px) rotate(0.3deg); }
+  90% { transform: translate(-2px, 1px) rotate(-0.2deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+.screen-shake { animation: screenshake 0.4s ease-out; }
+
+/* ── GLITCH TEXT ── */
+@keyframes glitchtext {
+  0% { text-shadow: 2px 0 #C06060, -2px 0 #6080C0; clip-path: inset(0 0 0 0); }
+  10% { text-shadow: -3px 0 #C06060, 3px 0 #6080C0; clip-path: inset(40% 0 20% 0); }
+  20% { text-shadow: 2px 0 #C06060, -2px 0 #6080C0; clip-path: inset(10% 0 60% 0); }
+  30% { text-shadow: -1px 0 #C06060, 1px 0 #6080C0; clip-path: inset(80% 0 5% 0); }
+  40% { text-shadow: 3px 0 #C06060, -3px 0 #6080C0; clip-path: inset(0 0 0 0); }
+  50% { text-shadow: -2px 0 #C06060, 2px 0 #6080C0; clip-path: inset(30% 0 40% 0); }
+  60% { text-shadow: 1px 0 #C06060, -1px 0 #6080C0; clip-path: inset(0 0 0 0); }
+  100% { text-shadow: 0 0 transparent, 0 0 transparent; clip-path: inset(0 0 0 0); }
+}
+.glitch-text { animation: glitchtext 0.6s ease-out; }
+
+/* ── CHROMATIC ABERRATION ── */
+@keyframes chromatic {
+  0% { filter: none; }
+  25% { filter: blur(0.5px); }
+  50% { filter: none; }
+  75% { filter: blur(0.3px); }
+  100% { filter: none; }
+}
+
+/* ── FLICKER ── */
+@keyframes flicker {
+  0%, 95%, 100% { opacity: 1; }
+  96% { opacity: 0.8; }
+  97% { opacity: 1; }
+  98% { opacity: 0.7; }
+  99% { opacity: 1; }
+}
+.crt-flicker { animation: flicker 4s linear infinite; }
+
+/* ── TYPEWRITER ── */
+@keyframes typewriter-cursor {
+  0%, 49% { border-right-color: var(--fg); }
+  50%, 100% { border-right-color: transparent; }
+}
+.typewriter-cursor { animation: typewriter-cursor 1s step-end infinite; border-right: 2px solid var(--fg); }
+
+/* ── DATA STREAM ── */
+@keyframes datastream {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 0% 100%; }
+}
+
+/* ── BREATHING GLOW ── */
+@keyframes breathingglow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+/* ── PROGRESS STRIPE ── */
+@keyframes progressstripe {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+.progress-striped {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255,255,255,0.08) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.08) 75%,
+    transparent 75%
+  );
+  background-size: 40px 40px;
+  animation: progressstripe 1s linear infinite;
+}
+
+/* ── FADE IN UP ── */
+@keyframes fadeinup {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeinup { animation: fadeinup 0.6s ease-out forwards; }
+
+/* ── SCALE BURST ── */
+@keyframes scaleburst {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-scaleburst { animation: scaleburst 0.4s ease-out forwards; }
+
+/* ── BORDER TRACE ── */
+@keyframes bordertrace {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.border-animated {
+  background-size: 200% 200%;
+  animation: bordertrace 3s ease infinite;
+}
+
+/* ── NOISE OVERLAY ── */
+@keyframes noise {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-5%, -10%); }
+  20% { transform: translate(-15%, 5%); }
+  30% { transform: translate(7%, -25%); }
+  40% { transform: translate(-5%, 25%); }
+  50% { transform: translate(-15%, 10%); }
+  60% { transform: translate(15%, 0%); }
+  70% { transform: translate(0%, 15%); }
+  80% { transform: translate(3%, 35%); }
+  90% { transform: translate(-10%, 10%); }
+}

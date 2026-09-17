@@ -46,9 +46,10 @@ export async function POST(req: NextRequest) {
     const hunt = addHunt(sessionId, huntData);
 
     return NextResponse.json({ hunt });
-  } catch {
+  } catch (e) {
+    console.error('[ravel/hunt] generateHuntChallenge threw:', e);
     return NextResponse.json(
-      { error: 'Failed to generate hunt' },
+      { error: 'Failed to generate hunt', detail: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }

@@ -172,8 +172,13 @@ export function RavelApp() {
         setGameHtml(vdata.html);
         setSession(prev => prev ? { ...prev, currentVersion: vdata.newVersion, totalBuilds: prev.totalBuilds + 1 } : null);
         setPhase('result');
+      } else if (vdata.status === 'retry' && vdata.reason) {
+        setRefusal(`The AI tried to adapt but ${vdata.reason.toLowerCase()} Retrying will keep your attack alive.`);
+        setPhase('refused');
       } else {
-        setRefusal('AI FAILED TO ADAPT. YOUR ATTACK SURVIVED.');
+        const reason = vdata.reason || '';
+        const notReproduced = oldV.bugMet === false || /did not reproduce|expected bug side/i.test(reason);
+        setRefusal(notReproduced ? 'The attack did not reproduce a failure. Try breaking it differently.' : 'AI FAILED TO ADAPT. YOUR ATTACK SURVIVED.');
         setPhase('refused');
       }
     } catch { 
@@ -181,13 +186,24 @@ export function RavelApp() {
     }
   }, [session, currentHunt, stopRecording, triggerShake]);
 
-  const handleNextHunt = useCallback(() => {
+  const handleNextHunt = useCallback(async () => {
     setPhase('hunting'); 
     setCaptureMessage(''); setPatchRound(null); setOldVerdict(null); setNewVerdict(null);
     setRefusal('');
     setHuntNumber(n => n + 1);
     startRecording();
-  }, [startRecording]);
+    // Round 2+ MUST get a fresh oracle against the CURRENT (adapted) build,
+    // otherwise we keep testing the square-1 oracle forever. Fetch a new hunt.
+    try {
+      const res = await fetch('/api/ravel/hunt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionIdRef.current }),
+      });
+      const data = await res.json();
+      if (data.hunt && data.hunt.oracle) setCurrentHunt(data.hunt);
+    } catch { /* keep current hunt as fallback so it never hard-fails */ }
+    startRecording();
+  }, [startRecording, sessionIdRef]);
 
   const handleReset = useCallback(() => {
     stopRecording(); setSession(null); setGameHtml(''); setCurrentHunt(null);

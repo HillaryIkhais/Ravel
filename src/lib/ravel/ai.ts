@@ -219,16 +219,17 @@ export async function generateHuntChallenge(gameCode: string, gameTitle: string)
     bugValue: unknown;
     fixedValue: unknown;
     evalExpression?: string;
+    fixedExpression?: string;
   };
 }> {
   const client = getClient();
 
   const response = await client.chat.completions.create({
-    model: 'gpt-4o',
+    model: defaultModel(),
     messages: [
       {
         role: 'system',
-        content: `You are a game challenge and oracle generator. Given game code, generate a specific hunt challenge AND a machine-checkable oracle condition.
+        content: `You are a game challenge and oracle generator. Given game code, generate a specific hunt challenge AND a machine-checkable two-sided oracle condition.
 
 The challenge should:
 1. Target a potential bug or exploit in the game
@@ -236,7 +237,9 @@ The challenge should:
 3. Have clear success criteria
 4. Be fun to attempt
 
-The oracle defines what "broken" means. It references a game state variable and checks its value.
+The oracle defines what "broken" means as a TWO-SIDED contract:
+- BUG side: a JS expression that evaluates TRUE when the attack reproduces the failure on the current build.
+- FIX side: a JS expression that evaluates TRUE when the failure is fixed AND the correct behavior is positively present.
 
 IMPORTANT: The oracle must reference variables that EXIST in the game code. Look at the code to find actual variable names like: score, lives, health, enemy, player, targets, enemies, gameOver, etc.
 
@@ -249,20 +252,20 @@ Return JSON:
   "reward": number (10-500 based on difficulty),
   "oracle": {
     "description": "human-readable: 'Enemy should target the player but instead targets the decoy'",
-    "statePath": "dot-separated path to the game state variable (e.g., 'enemy.target', 'player.health', 'score')",
+    "statePath": "dot-separated path to the game state variable",
     "operator": "equals|not_equals|less_than|greater_than|contains|exists|not_exists",
     "bugValue": "the value when the bug is PRESENT (what the human observed)",
-    "fixedValue": "the value when the bug is FIXED (what should happen after patch)"
+    "fixedValue": "the value when the bug is FIXED (what should happen after patch)",
+    "evalExpression": "JS expression TRUE when bug is PRESENT, e.g. 'window.__homingTotal >= 1 && window.__trackDead === true'",
+    "fixedExpression": "JS expression TRUE when bug is FIXED and correct behavior restored, e.g. 'window.__homingTotal >= 1 && window.__tracking === true'"
   }
 }
 
-If the bug is hard to express as a single variable, use evalExpression instead:
-"evalExpression": "typeof enemy !== 'undefined' && enemy.target !== player"
-This JS expression will be evaluated against the game's global scope.`
+Both evalExpression and fixedExpression are REQUIRED. They will be evaluated against the game's global scope after replaying the exact attack.`
       },
       {
         role: 'user',
-        content: `Game: "${gameTitle}"\n\nCode:\n${gameCode.slice(0, 3000)}\n\nGenerate a hunt challenge with an oracle.`
+        content: `Game: "${gameTitle}"\n\nCode:\n${gameCode.slice(0, 3000)}\n\nGenerate a hunt challenge with a two-sided oracle.`
       }
     ],
     temperature: 0.9,
@@ -288,25 +291,27 @@ This JS expression will be evaluated against the game's global scope.`
           bugValue: parsed.oracle.bugValue ?? null,
           fixedValue: parsed.oracle.fixedValue ?? null,
           evalExpression: parsed.oracle.evalExpression,
+          fixedExpression: parsed.oracle.fixedExpression,
         },
       };
     }
   } catch {}
 
-  // Fallback: generic oracle that checks for errors
+  // Fallback: error-based two-sided oracle (bug side TRUE when attack causes an error)
   return {
     title: 'Find a Bug',
-    objective: 'Try to break the game in any way possible',
+    objective: 'Try to break the game in any way possible — a crash, a freeze, a state it cannot recover from',
     difficulty: 'easy',
-    expectedBehavior: 'Game should work correctly',
+    expectedBehavior: 'Game should run without errors',
     reward: 50,
     oracle: {
-      description: 'Game should not throw errors or crash',
+      description: 'The attack causes a runtime error. After the fix, the game runs clean under the same attack.',
       statePath: '',
-      operator: 'not_exists',
+      operator: 'exists',
       bugValue: 'error',
       fixedValue: null,
-      evalExpression: 'typeof window.__plError === "undefined"',
+      evalExpression: 'typeof window.__plError !== "undefined"',
+      fixedExpression: 'typeof window.__plError === "undefined"',
     },
   };
 }

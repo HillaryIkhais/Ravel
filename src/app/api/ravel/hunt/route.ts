@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       bugValue: challenge.oracle.bugValue,
       fixedValue: challenge.oracle.fixedValue,
       evalExpression: challenge.oracle.evalExpression,
+      fixedExpression: challenge.oracle.fixedExpression,
     };
 
     const huntData: Omit<HuntChallenge, 'id'> = {

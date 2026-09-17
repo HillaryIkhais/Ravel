@@ -2,22 +2,8 @@ import { injectRecordingHarness } from './harness';
 import { wrapGameHtml } from './html';
 import { type OracleCondition } from '@/types/ravel';
 
-/**
- * RAVEL Showcase — a deterministic, known-good demo.
- *
- * The demo must NOT depend on GPT randomly producing a perfect game.
- * This is the seed used by "LAUNCH DEMO": a hand-written buggy build,
- * a fixed hunt, and a machine-checkable two-sided oracle.
- *
- * Bug: enemies are supposed to chase your ship. In v0 they lock onto a
- * stale corner forever, so they stream away from you. The oracle proves
- * it both ways:
- *   - bug side:  3+ enemies exist and ZERO are targeting you (__trackDead)
- *   - fix side:  3+ enemies exist and ALL are chasing you (__tracking)
- */
-
-export const SHOWCASE_VERSION_BASE = 11;
-export const SHOWCASE_HUNT_BASE = 3; // first demo hunt displays as HUNT #04
+export const SHOWCASE_VERSION_BASE = 6;
+export const SHOWCASE_HUNT_BASE = 3; 
 
 const SHOWCASE_GAME_CODE = `
 (function () {
@@ -26,126 +12,167 @@ const SHOWCASE_GAME_CODE = `
   var ctx = canvas.getContext('2d');
   var W = 800, H = 600;
 
-  // RAVEL: expose oracle state to the verification harness
-  window.__plExpose = ['__tracking', '__trackDead', '__homingActive', '__homingTotal'];
-  window.__tracking = false;
-  window.__trackDead = false;
-  window.__homingActive = 0;
-  window.__homingTotal = 0;
+  window.__plExpose = ['__decoyAttacked', '__playerAttacked', '__enemyTargetingPlayer'];
+  window.__decoyAttacked = false;
+  window.__playerAttacked = false;
+  window.__enemyTargetingPlayer = false;
 
-  var player = { x: 400, y: 330, r: 15 };
-  var speed = 3.4;
+  var player = { x: 400, y: 300, r: 15, alive: true };
+  var speed = 4;
   var keys = {};
   var enemies = [];
-  var maxEnemies = 6;
+  var decoys = [];
   var spawnTimer = 0;
-
-  // THE BUG: enemies lock onto a fixed corner and never re-target the player.
-  var CORNER = { x: W - 30, y: 30 };
+  
+  // The boundary function. AI will patch this.
+  // state: { enemies, decoys, player }
+  // memory: persistent object per enemy
+  window.enemyDecision = function(enemy, state, memory) {
+    // Current Bug: Enemy always targets the nearest entity, even if it's a decoy.
+    var target = state.player;
+    var minDist = Infinity;
+    
+    // Check decoys
+    for (var i = 0; i < state.decoys.length; i++) {
+      var d = state.decoys[i];
+      var dist = Math.hypot(d.x - enemy.x, d.y - enemy.y);
+      if (dist < minDist) {
+        minDist = dist;
+        target = d;
+      }
+    }
+    
+    // Check player
+    var pDist = Math.hypot(state.player.x - enemy.x, state.player.y - enemy.y);
+    if (pDist < minDist) {
+      target = state.player;
+    }
+    
+    return { targetX: target.x, targetY: target.y, isPlayer: target === state.player };
+  };
 
   window.addEventListener('keydown', function (e) {
     keys[e.key] = true;
     if (e.key.indexOf('Arrow') === 0 || e.key === ' ' || 'wasd'.indexOf(e.key) >= 0) e.preventDefault();
+    
+    // Space to deploy decoy
+    if (e.key === ' ' && decoys.length < 3 && player.alive) {
+      decoys.push({ x: player.x, y: player.y, timer: 300 });
+    }
   });
   window.addEventListener('keyup', function (e) { keys[e.key] = false; });
 
   function spawnEnemy() {
     var side = Math.floor(Math.random() * 4);
     var x = 0, y = 0;
-    if (side === 0) { x = 40 + Math.random() * (W - 80); y = -30; }
-    else if (side === 1) { x = W + 30; y = 40 + Math.random() * (H - 80); }
-    else if (side === 2) { x = 40 + Math.random() * (W - 80); y = H + 30; }
-    else { x = -30; y = 40 + Math.random() * (H - 80); }
-    enemies.push({ x: x, y: y, r: 13, speed: 1.4 + Math.random() * 0.7, tx: CORNER.x, ty: CORNER.y });
+    if (side === 0) { x = Math.random() * W; y = -30; }
+    else if (side === 1) { x = W + 30; y = Math.random() * H; }
+    else if (side === 2) { x = Math.random() * W; y = H + 30; }
+    else { x = -30; y = Math.random() * H; }
+    enemies.push({ x: x, y: y, r: 12, speed: 2.5, memory: {} });
   }
 
+  // Spawn an initial enemy quickly
+  spawnEnemy();
+
   function update() {
-    if (keys.ArrowLeft || keys.a) player.x -= speed;
-    if (keys.ArrowRight || keys.d) player.x += speed;
-    if (keys.ArrowUp || keys.w) player.y -= speed;
-    if (keys.ArrowDown || keys.s) player.y += speed;
-    player.x = Math.max(24, Math.min(W - 24, player.x));
-    player.y = Math.max(24, Math.min(H - 24, player.y));
+    if (player.alive) {
+      if (keys.ArrowLeft || keys.a) player.x -= speed;
+      if (keys.ArrowRight || keys.d) player.x += speed;
+      if (keys.ArrowUp || keys.w) player.y -= speed;
+      if (keys.ArrowDown || keys.s) player.y += speed;
+      player.x = Math.max(20, Math.min(W - 20, player.x));
+      player.y = Math.max(20, Math.min(H - 20, player.y));
+    }
+
+    // Update decoys
+    for (var i = decoys.length - 1; i >= 0; i--) {
+      decoys[i].timer--;
+      if (decoys[i].timer <= 0) decoys.splice(i, 1);
+    }
 
     spawnTimer++;
-    if (spawnTimer > 55 && enemies.length < maxEnemies) { spawnEnemy(); spawnTimer = 0; }
+    if (spawnTimer > 120 && enemies.length < 3) { spawnEnemy(); spawnTimer = 0; }
 
-    // BUG: every enemy flies toward its locked corner target (tx/ty),
-    // never re-targeting the player.
+    var targetingPlayer = false;
+    
+    var state = { player: player, decoys: decoys, enemies: enemies };
+
     for (var i = enemies.length - 1; i >= 0; i--) {
       var e = enemies[i];
-      var dx = e.tx - e.x, dy = e.ty - e.y;
-      var d = Math.sqrt(dx * dx + dy * dy) || 1;
+      var decision = window.enemyDecision(e, state, e.memory);
+      
+      var dx = decision.targetX - e.x, dy = decision.targetY - e.y;
+      var d = Math.hypot(dx, dy) || 1;
       e.x += (dx / d) * e.speed;
       e.y += (dy / d) * e.speed;
-    }
+      
+      if (decision.isPlayer) targetingPlayer = true;
 
-    // Oracle bookkeeping
-    var live = enemies.length;
-    var homing = 0;
-    for (var j = 0; j < live; j++) {
-      var b = enemies[j];
-      var vx = b.tx - b.x, vy = b.ty - b.y;
-      var hx = player.x - b.x, hy = player.y - b.y;
-      var vn = Math.sqrt(vx * vx + vy * vy) || 1;
-      var hn = Math.sqrt(hx * hx + hy * hy) || 1;
-      if ((vx * hx + vy * hy) / (vn * hn) > 0.85) homing++;
+      // Collisions
+      if (player.alive && Math.hypot(player.x - e.x, player.y - e.y) < player.r + e.r) {
+        window.__playerAttacked = true;
+        player.alive = false;
+      }
+      
+      for (var j = decoys.length - 1; j >= 0; j--) {
+        if (Math.hypot(decoys[j].x - e.x, decoys[j].y - e.y) < 15 + e.r) {
+          window.__decoyAttacked = true;
+          decoys.splice(j, 1);
+          enemies.splice(i, 1);
+          break;
+        }
+      }
     }
-    window.__homingTotal = live;
-    window.__homingActive = homing;
-    window.__tracking = live > 0 && homing >= live;
-    window.__trackDead = live > 0 && homing === 0;
+    
+    window.__enemyTargetingPlayer = targetingPlayer;
   }
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#05060f';
+    ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, W, H);
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
     for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
     for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
 
-    // player ship
-    ctx.save();
-    ctx.translate(player.x, player.y);
-    ctx.fillStyle = '#22d3ee';
-    ctx.beginPath();
-    ctx.moveTo(0, -20); ctx.lineTo(14, 14); ctx.lineTo(0, 6); ctx.lineTo(-14, 14);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = 'rgba(34,211,238,0.12)';
-    ctx.beginPath(); ctx.arc(player.x, player.y, 26, 0, Math.PI * 2); ctx.fill();
+    // Decoys
+    for (var i = 0; i < decoys.length; i++) {
+      var dc = decoys[i];
+      ctx.fillStyle = 'rgba(34,211,238,0.3)';
+      ctx.beginPath(); ctx.arc(dc.x, dc.y, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#22d3ee'; ctx.stroke();
+      ctx.fillStyle = '#22d3ee';
+      ctx.font = '10px monospace';
+      ctx.fillText('DECOY', dc.x - 14, dc.y - 20);
+    }
 
-    // where the bugs are actually flying (stale target)
-    ctx.strokeStyle = 'rgba(248,113,113,0.4)';
-    ctx.setLineDash([4, 6]);
-    ctx.strokeRect(CORNER.x - 22, CORNER.y - 22, 44, 44);
-    ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(248,113,113,0.75)';
-    ctx.font = '10px monospace';
-    ctx.fillText('STALE TARGET', CORNER.x - 62, CORNER.y - 30);
+    // Player
+    if (player.alive) {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = '#22d3ee';
+      ctx.beginPath();
+      ctx.moveTo(0, -15); ctx.lineTo(12, 12); ctx.lineTo(0, 5); ctx.lineTo(-12, 12);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#ef4444';
+      ctx.font = '24px monospace';
+      ctx.fillText('DESTROYED', W/2 - 60, H/2);
+    }
 
-    // enemies
+    // Enemies
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
-      ctx.save();
-      ctx.translate(e.x, e.y);
-      var ang = Math.atan2(e.ty - e.y, e.tx - e.x);
-      ctx.rotate(ang);
-      ctx.fillStyle = '#f87171';
-      ctx.beginPath();
-      ctx.moveTo(16, 0); ctx.lineTo(-9, 9); ctx.lineTo(-9, -9);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = 'rgba(248,113,113,0.5)';
-      ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
     }
 
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = '12px monospace';
-    ctx.fillText('ARROWS / WASD to fly. Enemies should HUNT YOU.', 16, H - 16);
+    ctx.fillText('ARROWS to move. SPACE to drop decoy.', 16, H - 16);
   }
 
   function loop() {
@@ -156,7 +183,7 @@ const SHOWCASE_GAME_CODE = `
   }
 
   function boot() {
-    if (window.__plReportState) window.__plReportState({ tracking: window.__tracking });
+    if (window.__plReportState) window.__plReportState({ tracking: window.__enemyTargetingPlayer });
     requestAnimationFrame(loop);
   }
   if (document.readyState === 'loading') {
@@ -169,14 +196,14 @@ const SHOWCASE_GAME_CODE = `
 
 export const SHOWCASE_ORACLE: OracleCondition = {
   description:
-    '3+ enemies exist and NONE are targeting your ship (bug proven). After the fix, 3+ enemies exist and ALL are chasing you.',
+    'Enemy targets decoy instead of player. After fix, enemy should ignore decoys and go straight for player.',
   statePath: '',
   operator: 'equals',
   bugValue: null,
   fixedValue: null,
   fixedOperator: 'equals',
-  evalExpression: 'window.__homingTotal >= 3 && window.__trackDead === true',
-  fixedExpression: 'window.__homingTotal >= 3 && window.__tracking === true',
+  evalExpression: 'window.__decoyAttacked === true', // BUG side: Decoy is attacked
+  fixedExpression: 'window.__decoyAttacked === false && window.__playerAttacked === true', // FIX side: Player is attacked, decoy ignored
 };
 
 export interface ShowcaseSeed {
@@ -196,17 +223,17 @@ export interface ShowcaseSeed {
 export function createShowcaseSeed(): ShowcaseSeed {
   const code = injectRecordingHarness(SHOWCASE_GAME_CODE);
   return {
-    gameTitle: 'Enemy Targeting',
+    gameTitle: 'AI Survival Arena',
     code,
     html: wrapGameHtml(code),
     versionBase: SHOWCASE_VERSION_BASE,
     huntBase: SHOWCASE_HUNT_BASE,
-    huntTitle: 'Break the enemy targeting',
+    huntTitle: 'BREAK THE ENEMY AI',
     huntObjective:
-      'Enemies are supposed to chase your ship. Fly anywhere, then hold still and let 3 enemies spawn. If they stream to the top-right corner and never come for you, you have found the bug.',
+      'Bait the enemy into attacking your decoy. When you see it fall for the decoy, you win.',
     huntDifficulty: 'medium',
     huntReward: 2.4,
-    huntExpectedBehavior: 'Enemies continuously re-target your ship and chase it across the screen.',
+    huntExpectedBehavior: 'Enemy ignores decoys and relentlessly pursues the player.',
     oracle: SHOWCASE_ORACLE,
   };
 }

@@ -2,8 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bug, CheckCircle, XCircle, Trophy,
-  ArrowRight, RotateCcw, ShieldX, Target, Crosshair, Sun, Moon, Zap, Terminal,
+import { Bug, CheckCircle, XCircle,
+  ArrowRight, RotateCcw, ShieldX, Target, Sun, Moon, Zap, Terminal,
 } from 'lucide-react';
 import { verifyReplayHtml } from '@/lib/ravel/verifier';
 import { type OracleVerdict, type OracleCondition, type InputEvent } from '@/types/ravel';
@@ -53,7 +53,6 @@ export function RavelUI() {
   const [isRecording, setIsRecording] = useState(false);
   const [currentHunt, setCurrentHunt] = useState<Hunt | null>(null);
   const [huntNumber, setHuntNumber] = useState(1);
-  const [ambientProgress, setAmbientProgress] = useState(24);
   const [patchProgress, setPatchProgress] = useState(0);
   const [captureMessage, setCaptureMessage] = useState('');
   const [patchRound, setPatchRound] = useState<PatchRound | null>(null);
@@ -72,6 +71,7 @@ export function RavelUI() {
   const [cursorPos, setCursorPos] = useState({ x: -100, y: -100 });
   const [cursorHover, setCursorHover] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
+  const [initialBuild, setInitialBuild] = useState(false);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const recordedEvents = useRef<InputEvent[]>([]);
@@ -80,6 +80,7 @@ export function RavelUI() {
   const traceIdRef = useRef<string | null>(null);
   const mouseRef = useRef({ x: -1000, y: -1000 });
   const tiltRef = useRef({ x: 0, y: 0 });
+  const isInitialBuild = useRef(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -125,13 +126,22 @@ export function RavelUI() {
   useEffect(() => {
     if (phase !== 'patching') return;
     let cancelled = false;
-    const lines = [
-      '> Studying your attack...',
-      '> Understanding what you did...',
-      '> Building a defense...',
-      '> Rebuilding the game...',
-      '> Checking if it holds...',
-    ];
+    const lines = isInitialBuild.current
+      ? [
+          '> AI is thinking about your game...',
+          '> Designing game mechanics...',
+          '> Writing game logic...',
+          '> Adding controls and physics...',
+          '> Testing for bugs...',
+          '> Build complete.',
+        ]
+      : [
+          '> Studying your attack...',
+          '> Understanding what you did...',
+          '> Building a defense...',
+          '> Rebuilding the game...',
+          '> Checking if it holds...',
+        ];
     let i = 0;
     const id = setInterval(() => {
       if (i < lines.length) {
@@ -143,17 +153,6 @@ export function RavelUI() {
     }, 600);
     return () => { cancelled = true; clearInterval(id); };
   }, [phase]);
-
-  useEffect(() => {
-    if (phase !== 'hunting' || !session) return;
-    const id = setInterval(() => {
-      setAmbientProgress(p => {
-        const next = p + 0.7 + Math.random() * 1.3;
-        return next > 96 ? 6 + Math.random() * 12 : next;
-      });
-    }, 220);
-    return () => clearInterval(id);
-  }, [phase, session]);
 
   useEffect(() => {
     if (phase !== 'patching' && phase !== 'verifying') return;
@@ -190,33 +189,9 @@ export function RavelUI() {
     startRecording();
   }, [startRecording]);
 
-  const launchDemo = useCallback(async () => {
-    setPhase('patching');
-    setAmbientProgress(24);
-    try {
-      const res = await fetch('/api/ravel/demo', { method: 'POST' });
-      const data = await res.json();
-      if (data.error) { setPhase('idle'); setRefusal(data.error); return; }
-      sessionIdRef.current = data.sessionId;
-      setHuntNumber(data.huntNumber);
-      enterHunt(
-        { id: data.sessionId, gameTitle: data.title, currentVersion: data.version,
-          versionBase: data.versionBase, huntBase: data.huntBase, totalBuilds: 1, totalXp: 0, totalEarned: 0 },
-        data.html, data.hunt,
-      );
-    } catch { setPhase('idle'); setRefusal('Demo failed to load.'); }
-  }, [enterHunt]);
-
-  const autoStarted = useRef(false);
-  useEffect(() => {
-    if (!autoStarted.current && phase === 'idle') {
-      autoStarted.current = true;
-      void launchDemo();
-    }
-  }, [phase, launchDemo]);
-
   const launchGenerated = useCallback(async (title: string) => {
-    setPhase('patching'); setPatchProgress(6);
+    setPhase('patching'); setPatchProgress(6); setTerminalLines([]);
+    isInitialBuild.current = true; setInitialBuild(true);
     try {
       const res = await fetch('/api/ravel/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
@@ -224,11 +199,12 @@ export function RavelUI() {
       const data = await res.json();
       if (data.error) { setPhase('idle'); setRefusal(data.error); return; }
       sessionIdRef.current = data.sessionId; setHuntNumber(1);
+      isInitialBuild.current = false; setInitialBuild(false);
       enterHunt(
         { id: data.sessionId, gameTitle: data.title, currentVersion: data.version,
           versionBase: data.versionBase ?? 0, huntBase: data.huntBase ?? 0, totalBuilds: 1, totalXp: 0, totalEarned: 0 },
         data.html,
-        { id: '', title: 'Find a bug', objective: 'Play the game and try to break it. When you are sure the behavior is wrong, capture it.', difficulty: 'medium', reward: 2.4, status: 'active' },
+        { id: '', title: 'Break the game', objective: 'Play the game and find a way to break it. When you have, click I BROKE IT.', difficulty: 'medium', reward: 2.4, status: 'active' },
       );
       try {
         const hres = await fetch('/api/ravel/hunt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: data.sessionId }) });
@@ -255,7 +231,7 @@ export function RavelUI() {
           body: JSON.stringify({ sessionId: sessionIdRef.current, traceId, attempt, lastFailureReason: failureReason ?? null }),
         });
         if (!pres.ok) { const perr = await pres.json(); setRefusal(perr.reason || 'AI patch failed.'); setPhase('refused'); setCaptureMessage('NO PROOF, NO REWARD'); return; }
-        const pdata = await pres.json(); setPatchRound(pdata); setPhase('verifying'); setCaptureMessage('REPLAYING YOUR ATTACK...');
+        const pdata = await pres.json(); setPatchRound(pdata); setPhase('verifying'); setCaptureMessage('TESTING YOUR ATTACK...');
         const [oldV, newV] = await Promise.all([verifyReplayHtml(pdata.oldReplayHtml, pdata.oldVersion), verifyReplayHtml(pdata.newReplayHtml, pdata.newVersion)]);
         setOldVerdict(oldV); setNewVerdict(newV);
         const vres = await fetch('/api/ravel/verify', {
@@ -270,8 +246,8 @@ export function RavelUI() {
           setPhase('result'); setPatchProgress(100); return;
         }
         if (vdata.status === 'retry') { failureReason = vdata.decision.reason; attempt += 1; setCaptureMessage(`YOUR ATTACK STILL WORKS. RETRY ${attempt}/3`); continue; }
-        setRefusal(vdata.reason || 'Verification failed.'); setPhase('refused'); setCaptureMessage('NO PROOF, NO REWARD'); return;
-      } catch { setRefusal('Patch/verify cycle failed.'); setPhase('refused'); setCaptureMessage('NO PROOF, NO REWARD'); return; }
+        setRefusal(vdata.reason || 'Verification failed.'); setPhase('refused'); setCaptureMessage('NOT A REAL BREAK'); return;
+      } catch { setRefusal('Patch/verify cycle failed.'); setPhase('refused'); setCaptureMessage('NOT A REAL BREAK'); return; }
     }
   }, []);
 
@@ -287,15 +263,15 @@ export function RavelUI() {
         body: JSON.stringify({ sessionId: session.id, huntId: currentHunt.id, inputEvents: recordedEvents.current, expectedBehavior: currentHunt.objective, observedBehavior: 'Player attacked and observed unexpected behavior' }),
       });
       const data = await res.json();
-      if (data.refused) { setRefusal(data.reason); setPhase('refused'); setCaptureMessage('NO PROOF, NO REWARD'); return; }
+      if (data.refused) { setRefusal(data.reason); setPhase('refused'); setCaptureMessage('NOT A REAL BREAK'); return; }
       traceIdRef.current = data.traceId; setAttemptNo(1); await runPatchCycle(1, data.traceId);
-    } catch { setRefusal('Failed to submit your attack.'); setPhase('refused'); setCaptureMessage('CAPTURE FAILED'); }
+    } catch { setRefusal('Failed to submit your attack.'); setPhase('refused'); setCaptureMessage('ATTACK FAILED'); }
   }, [session, currentHunt, stopRecording, runPatchCycle, triggerShake, triggerGlitch]);
 
   const handleNextHunt = useCallback(async () => {
     if (!session) return;
     setPhase('hunting'); setCaptureMessage(''); setPatchRound(null); setOldVerdict(null); setNewVerdict(null);
-    setReward(null); setRefusal(''); setAmbientProgress(10);
+    setReward(null); setRefusal('');
     recordedEvents.current = []; setIsRecording(true); setHuntNumber(n => n + 1);
     try {
       const res = await fetch('/api/ravel/hunt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.id }) });
@@ -308,7 +284,7 @@ export function RavelUI() {
     stopRecording(); setGameTitle(''); setSession(null); setGameHtml(''); setIsRecording(false);
     setCurrentHunt(null); setCaptureMessage(''); setPatchRound(null); setOldVerdict(null);
     setNewVerdict(null); setReward(null); setRefusal(''); setPhase('idle');
-    sessionIdRef.current = null; traceIdRef.current = null; setAttemptNo(1); setAmbientProgress(24);
+    sessionIdRef.current = null; traceIdRef.current = null; setAttemptNo(1);
   }, [stopRecording]);
 
   const nextVersion = (session?.currentVersion ?? 0) + 1;
@@ -343,12 +319,11 @@ export function RavelUI() {
                   <RotateCcw className="w-3 h-3" />
                   New Game
                 </button>
-                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full"
-                  style={{ background: dk ? 'rgba(200,168,130,0.08)' : 'rgba(139,115,85,0.08)', color: dk ? '#C8A882' : '#8B7355' }}>
-                  <Trophy className="w-3.5 h-3.5" />
-                  <span>{session.totalXp} XP</span>
-                </motion.div>
+                <div className="flex items-center gap-3 text-xs font-mono">
+                  <span style={{ color: dk ? '#C8A882' : '#8B7355' }}>BUILD {pad(session.currentVersion)}</span>
+                  <div className="w-px h-3" style={{ background: 'var(--border)' }} />
+                  <span style={{ color: 'var(--muted)' }}>{session.totalBuilds - 1} SURVIVED</span>
+                </div>
               </>
             )}
             <button
@@ -369,7 +344,7 @@ export function RavelUI() {
         {!session ? (
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <div className="min-h-[85vh] flex flex-col items-center justify-center text-center">
-              <div className="relative mb-6">
+              <div className="relative mb-4">
                 <h1 className="font-editorial text-5xl sm:text-6xl md:text-7xl lg:text-8xl leading-[1.05] tracking-tight max-w-4xl">
                   Break what AI built.
                 </h1>
@@ -378,82 +353,53 @@ export function RavelUI() {
                   filter: 'blur(40px)', opacity: 0.4,
                 }} />
               </div>
-              <p className="text-lg sm:text-xl max-w-xl mb-6" style={{ color: 'var(--muted)' }}>
-                The AI made this. Can you break it?
+              <p className="text-base sm:text-lg max-w-lg mb-12" style={{ color: 'var(--muted)' }}>
+                Give AI a task. While it builds, you try to break what it makes.
               </p>
-              <p className="text-sm max-w-md mb-12 leading-relaxed" style={{ color: 'var(--muted)', opacity: 0.7 }}>
-                Every time you break its rules, it rebuilds itself to stop you. Your attack becomes the reason the next version changes.
-              </p>
-              <div className="relative group">
-                <div className="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{
-                  background: dk
-                    ? 'linear-gradient(135deg, rgba(200,168,130,0.3), rgba(192,96,96,0.2))'
-                    : 'linear-gradient(135deg, rgba(139,115,85,0.2), rgba(192,96,96,0.15))',
-                  filter: 'blur(12px)',
-                }} />
-                <button
-                  onClick={launchDemo}
-                  onMouseEnter={() => setCursorHover(true)}
-                  onMouseLeave={() => setCursorHover(false)}
-                  className="relative px-12 py-5 text-base font-medium tracking-wide rounded-full transition-all duration-300"
-                  style={{
-                    background: dk ? '#F5F5F5' : '#111',
-                    color: dk ? '#0A0A0A' : '#F8F6F3',
-                    boxShadow: dk ? '0 0 30px rgba(200,168,130,0.15)' : '0 0 30px rgba(139,115,85,0.1)',
-                  }}
-                >
-                  <span className="relative z-10 flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    BREAK IT
-                  </span>
-                </button>
-              </div>
-              <div className="mt-20 grid grid-cols-2 gap-10 max-w-lg w-full text-left">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <div className="w-2 h-2 rounded-full animate-slowpulse" style={{ background: dk ? '#C8A882' : '#8B7355' }} />
-                      <div className="absolute inset-0 w-2 h-2 rounded-full animate-ping" style={{ background: dk ? '#C8A882' : '#8B7355', opacity: 0.3 }} />
-                    </div>
-                    <span className="text-[10px] font-mono tracking-[0.2em] uppercase" style={{ color: 'var(--muted)' }}>AI building</span>
-                  </div>
-                  <div className="text-sm font-mono font-bold" style={{ color: dk ? '#C8A882' : '#8B7355' }}>v{nextVersion}</div>
-                  <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
-                    <div className="h-full rounded-full transition-all progress-striped" style={{ width: `${ambientProgress}%`, background: dk ? '#C8A882' : '#8B7355' }} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Crosshair className="w-3.5 h-3.5" style={{ color: '#C06060' }} />
-                    <span className="text-[10px] font-mono tracking-[0.2em] uppercase" style={{ color: 'var(--muted)' }}>You hunting</span>
-                  </div>
-                  <div className="text-sm font-mono font-bold" style={{ color: 'var(--fg)' }}>v11</div>
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>Break the enemy targeting.</p>
-                </div>
-              </div>
-              <div className="mt-12 flex flex-col items-center gap-3">
-                <div className="w-full flex gap-2 max-w-sm">
+              <div className="w-full max-w-lg mb-16">
+                <div className="flex gap-3">
                   <input
                     type="text"
                     value={gameTitle}
                     onChange={e => setGameTitle(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleStart()}
-                    placeholder="Tell AI what game to build..."
-                    className="flex-1 px-5 py-3 text-sm rounded-full outline-none transition-all duration-300 focus:ring-2"
+                    placeholder="Tell AI what to build..."
+                    className="flex-1 px-6 py-4 text-base rounded-xl outline-none transition-all duration-300 focus:ring-2"
                     style={{
-                      background: dk ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                      border: '1px solid var(--border)',
+                      background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                      border: `1px solid ${dk ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
                       color: 'var(--fg)',
                     }}
                   />
                   <button
                     onClick={handleStart}
                     disabled={!gameTitle.trim()}
-                    className="px-5 py-3 text-sm font-medium rounded-full transition-all disabled:opacity-30 duration-300"
-                    style={{ background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}
+                    className="px-8 py-4 text-base font-medium rounded-xl transition-all disabled:opacity-30 duration-300"
+                    style={{
+                      background: dk ? '#F5F5F5' : '#111',
+                      color: dk ? '#0A0A0A' : '#F8F6F3',
+                      boxShadow: dk ? '0 0 20px rgba(200,168,130,0.1)' : '0 0 20px rgba(139,115,85,0.08)',
+                    }}
                   >
-                    Build
+                    <span className="flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Build
+                    </span>
                   </button>
+                </div>
+                <div className="mt-4 flex items-center justify-center gap-4 text-xs" style={{ color: 'var(--muted)', opacity: 0.6 }}>
+                  <span>&ldquo;A space shooter with homing missiles&rdquo;</span>
+                  <span>&middot;</span>
+                  <span>&ldquo;A puzzle game with moving platforms&rdquo;</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-6 text-xs font-mono" style={{ color: 'var(--muted)', opacity: 0.5 }}>
+                <div className="flex items-center gap-2">
+                  <span>AI BUILDS</span>
+                  <ArrowRight className="w-3 h-3" />
+                  <span>YOU BREAK</span>
+                  <ArrowRight className="w-3 h-3" />
+                  <span>AI ADAPTS</span>
                 </div>
               </div>
             </div>
@@ -463,10 +409,12 @@ export function RavelUI() {
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs font-mono" style={{ color: 'var(--muted)' }}>
                 <span>
-                  {phase === 'hunting' ? `PLAYING v${session.currentVersion}` :
-                   building ? `PATCHING v${session.currentVersion} \u2192 v${nextVersion}` :
-                   phase === 'result' ? `SHIPPED v${session.currentVersion}` :
-                   phase === 'refused' ? `v${session.currentVersion} UNCHANGED` : 'READY'}
+                  {phase === 'hunting' ? `BUILD ${pad(session.currentVersion)} \u2022 ROUND ${huntLabel}` :
+                   building ? (initialBuild
+                     ? `AI BUILDING \u2022 GPT-4o generating...`
+                     : `AI ADAPTING \u2022 v${session.currentVersion} \u2192 v${nextVersion}`) :
+                   phase === 'result' ? `BUILD ${pad(session.currentVersion)} UPDATED` :
+                   phase === 'refused' ? `BUILD ${pad(session.currentVersion)} HOLDING` : 'READY'}
                 </span>
                 <span className="flex items-center gap-3">
                   {isRecording && !building && (
@@ -478,7 +426,7 @@ export function RavelUI() {
                     </motion.span>
                   )}
                   <span className="px-2 py-0.5 rounded-full" style={{ background: dk ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}>
-                    HUNT {huntLabel}
+                    ROUND {huntLabel}
                   </span>
                 </span>
               </div>
@@ -519,9 +467,11 @@ export function RavelUI() {
                       ))}
                     </div>
                     <p className="text-[10px] font-mono mt-3" style={{ color: 'var(--muted)', opacity: 0.5 }}>
-                      {phase === 'verifying'
-                        ? `Replaying ${pendingEventCount} events on v${patchRound?.oldVersion} and v${patchRound?.newVersion}`
-                        : `attempt ${attemptNo}/3`}
+                      {initialBuild
+                        ? 'GPT-4o is generating your game...'
+                        : phase === 'verifying'
+                          ? `Replaying ${pendingEventCount} events on v${patchRound?.oldVersion} and v${patchRound?.newVersion}`
+                          : `attempt ${attemptNo}/3`}
                     </p>
                     <div className="w-56 h-1.5 rounded-full mt-4 overflow-hidden" style={{ background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
                       <div className="h-full rounded-full transition-all progress-striped" style={{
@@ -548,10 +498,10 @@ export function RavelUI() {
                       How to play
                     </h3>
                     <div className="space-y-2 text-sm" style={{ color: 'var(--muted)' }}>
-                      <p><strong style={{ color: 'var(--fg)' }}>1.</strong> Play the game above. Try different moves.</p>
-                      <p><strong style={{ color: 'var(--fg)' }}>2.</strong> When you see something wrong &mdash; a crash, wrong behavior, anything broken &mdash; click <span style={{ color: '#C06060', fontWeight: 600 }}>CAPTURE BUG</span> below.</p>
-                      <p><strong style={{ color: 'var(--fg)' }}>3.</strong> The system replays your exact input on both the old game and the AI&apos;s new version.</p>
-                      <p><strong style={{ color: 'var(--fg)' }}>4.</strong> If the old version fails and the fix is present in the new version &mdash; <strong style={{ color: dk ? '#C8A882' : '#8B7355' }}>you win XP</strong>. The AI learned from your attack.</p>
+                      <p><strong style={{ color: 'var(--fg)' }}>1.</strong> Play the game above. Try to beat it.</p>
+                      <p><strong style={{ color: 'var(--fg)' }}>2.</strong> When you find a way to break it &mdash; click <span style={{ color: '#C06060', fontWeight: 600 }}>I BROKE IT</span> below.</p>
+                      <p><strong style={{ color: 'var(--fg)' }}>3.</strong> The AI learns from your attack and rebuilds the game.</p>
+                      <p><strong style={{ color: 'var(--fg)' }}>4.</strong> Try the same attack again. If it no longer works &mdash; <strong style={{ color: dk ? '#C8A882' : '#8B7355' }}>you win XP</strong>. The AI adapted to survive you.</p>
                     </div>
                     <button
                       onClick={() => setShowInstructions(false)}
@@ -602,7 +552,7 @@ export function RavelUI() {
                   }}
                 >
                   <Bug className="w-4 h-4 transition-transform group-hover:rotate-12" />
-                  CAPTURE BUG
+                  I BROKE IT
                 </motion.button>
               )}
 
@@ -621,39 +571,61 @@ export function RavelUI() {
                         <CheckCircle className="w-5 h-5" style={{ color: dk ? '#C8A882' : '#8B7355' }} />
                       </div>
                       <div>
-                        <div className="font-editorial text-2xl" style={{ color: dk ? '#C8A882' : '#8B7355' }}>The AI survived.</div>
-                        <div className="text-xs" style={{ color: 'var(--muted)' }}>Your attack was real. It adapted.</div>
+                        <div className="font-editorial text-2xl" style={{ color: dk ? '#C8A882' : '#8B7355' }}>The AI learned from your attack.</div>
+                        <div className="text-xs" style={{ color: 'var(--muted)' }}>It changed the game because of what you did.</div>
                       </div>
                     </div>
+
+                    {/* What the AI changed */}
+                    <div className="rounded-lg p-3 mb-4" style={{
+                      background: dk ? 'rgba(200,168,130,0.06)' : 'rgba(139,115,85,0.04)',
+                      border: `1px solid ${dk ? 'rgba(200,168,130,0.1)' : 'rgba(139,115,85,0.08)'}`,
+                    }}>
+                      <div className="text-[10px] font-mono uppercase tracking-wider mb-1.5" style={{ color: dk ? '#C8A882' : '#8B7355' }}>What it changed</div>
+                      <p className="text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>{patchRound.explanation}</p>
+                    </div>
+
+                    {/* Before / After */}
                     <div className="grid grid-cols-2 gap-3 mb-4">
                       <div className="rounded-lg p-3" style={{
                         background: dk ? 'rgba(192,96,96,0.06)' : 'rgba(192,96,96,0.04)',
                         border: `1px solid ${dk ? 'rgba(192,96,96,0.12)' : 'rgba(192,96,96,0.1)'}`,
                       }}>
-                        <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: '#C06060' }}>v{patchRound.oldVersion}</div>
+                        <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: '#C06060' }}>BEFORE &mdash; v{patchRound.oldVersion}</div>
                         <div className="flex items-center gap-1.5">
                           {oldVerdict?.bugMet ? <CheckCircle className="w-3.5 h-3.5" style={{ color: '#C06060' }} /> : <XCircle className="w-3.5 h-3.5" style={{ color: 'var(--muted)' }} />}
-                          <span className="text-xs font-medium" style={{ color: '#C06060' }}>YOU BROKE IT</span>
+                          <span className="text-xs font-medium" style={{ color: '#C06060' }}>YOUR ATTACK BROKE IT</span>
                         </div>
                       </div>
                       <div className="rounded-lg p-3" style={{
                         background: dk ? 'rgba(200,168,130,0.06)' : 'rgba(139,115,85,0.04)',
                         border: `1px solid ${dk ? 'rgba(200,168,130,0.12)' : 'rgba(139,115,85,0.1)'}`,
                       }}>
-                        <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: dk ? '#C8A882' : '#8B7355' }}>v{patchRound.newVersion}</div>
+                        <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: dk ? '#C8A882' : '#8B7355' }}>AFTER &mdash; v{patchRound.newVersion}</div>
                         <div className="flex items-center gap-1.5">
                           {newVerdict?.fixedMet ? <CheckCircle className="w-3.5 h-3.5" style={{ color: dk ? '#C8A882' : '#8B7355' }} /> : <XCircle className="w-3.5 h-3.5" style={{ color: 'var(--muted)' }} />}
-                          <span className="text-xs font-medium" style={{ color: dk ? '#C8A882' : '#8B7355' }}>AI COUNTERED</span>
+                          <span className="text-xs font-medium" style={{ color: dk ? '#C8A882' : '#8B7355' }}>AI SURVIVED YOUR ATTACK</span>
                         </div>
                       </div>
                     </div>
+
+                    {/* Proof card */}
+                    <div className="rounded-lg p-3 mb-4" style={{ background: dk ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', border: '1px solid var(--border)' }}>
+                      <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Proof of Break</div>
+                      <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                        <div><span style={{ color: 'var(--muted)' }}>Events:</span> <span style={{ color: 'var(--fg)' }}>{pendingEventCount}</span></div>
+                        <div><span style={{ color: 'var(--muted)' }}>Old:</span> <span style={{ color: '#C06060' }}>BROKE</span></div>
+                        <div><span style={{ color: 'var(--muted)' }}>New:</span> <span style={{ color: dk ? '#C8A882' : '#8B7355' }}>SURVIVED</span></div>
+                      </div>
+                    </div>
+
                     <div className="flex items-center justify-between rounded-lg px-4 py-3" style={{ background: dk ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', border: '1px solid var(--border)' }}>
-                      <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>Build {patchRound.newVersion} is ready</span>
+                      <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>v{patchRound.newVersion} is ready</span>
                       <button onClick={handleNextHunt}
                         onMouseEnter={() => setCursorHover(true)}
                         onMouseLeave={() => setCursorHover(false)}
                         className="px-5 py-2 rounded-full text-xs font-medium flex items-center gap-2 transition-all" style={{ background: dk ? '#F5F5F5' : '#111', color: dk ? '#0A0A0A' : '#F8F6F3' }}>
-                        BREAK IT AGAIN <ArrowRight className="w-3 h-3" />
+                        FIND ANOTHER WAY <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
@@ -661,10 +633,10 @@ export function RavelUI() {
                     <summary className="cursor-pointer font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Replay proof</summary>
                     <div className="mt-3 space-y-2">
                       <a href={`data:text/html,${encodeURIComponent(patchRound.oldReplayHtml)}`} target="_blank" rel="noopener noreferrer" className="block p-2 rounded-lg text-xs font-mono transition-colors" style={{ background: dk ? 'rgba(192,96,96,0.06)' : 'rgba(192,96,96,0.04)', color: '#C06060' }}>
-                        v{patchRound.oldVersion} &mdash; same attack (confirms bug)
+                        v{patchRound.oldVersion} &mdash; same attack, old build failed
                       </a>
                       <a href={`data:text/html,${encodeURIComponent(patchRound.newReplayHtml)}`} target="_blank" rel="noopener noreferrer" className="block p-2 rounded-lg text-xs font-mono transition-colors" style={{ background: dk ? 'rgba(200,168,130,0.06)' : 'rgba(139,115,85,0.04)', color: dk ? '#C8A882' : '#8B7355' }}>
-                        v{patchRound.newVersion} &mdash; same attack (fix verified)
+                        v{patchRound.newVersion} &mdash; same attack, new build survived
                       </a>
                     </div>
                   </details>
@@ -675,15 +647,15 @@ export function RavelUI() {
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl p-6" style={{ background: dk ? 'rgba(192,96,96,0.06)' : 'rgba(192,96,96,0.04)', border: `1px solid ${dk ? 'rgba(192,96,96,0.15)' : 'rgba(192,96,96,0.12)'}` }}>
                   <div className="flex items-center gap-3 mb-2">
                     <ShieldX className="w-6 h-6" style={{ color: '#C06060' }} />
-                    <div className="font-editorial text-2xl" style={{ color: '#C06060' }}>No proof, no reward</div>
+                    <div className="font-editorial text-2xl" style={{ color: '#C06060' }}>Not a real break</div>
                   </div>
                   <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>{refusal || captureMessage}</p>
                   <div className="flex gap-3">
                     <button onClick={() => { setPhase('hunting'); setRefusal(''); setCaptureMessage(''); startRecording(); }} className="px-5 py-2 rounded-full text-xs font-medium" style={{ background: dk ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
-                      Try again
+                      Try another attack
                     </button>
                     <button onClick={handleReset} className="px-5 py-2 rounded-full text-xs font-medium" style={{ border: '1px solid var(--border)', color: 'var(--muted)' }}>
-                      New session
+                      New game
                     </button>
                   </div>
                 </motion.div>
@@ -692,16 +664,20 @@ export function RavelUI() {
 
             <div className="space-y-4">
               <div className="rounded-xl p-4" style={{ background: dk ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', border: '1px solid var(--border)' }}>
-                <div className="text-[10px] font-mono uppercase tracking-[0.15em] mb-2" style={{ color: 'var(--muted)' }}>Session</div>
+                <div className="text-[10px] font-mono uppercase tracking-[0.15em] mb-2" style={{ color: 'var(--muted)' }}>Game</div>
                 <div className="text-sm font-medium mb-3">{session.gameTitle}</div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="rounded-lg p-2" style={{ background: dk ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }}>
-                    <div style={{ color: 'var(--muted)' }}>Current</div>
+                    <div style={{ color: 'var(--muted)' }}>Build</div>
                     <div className="text-lg font-bold font-mono">v{session.currentVersion}</div>
                   </div>
                   <div className="rounded-lg p-2" style={{ background: dk ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }}>
-                    <div style={{ color: 'var(--muted)' }}>Building</div>
+                    <div style={{ color: 'var(--muted)' }}>Next</div>
                     <div className="text-lg font-bold font-mono" style={{ color: dk ? '#C8A882' : '#8B7355' }}>v{nextVersion}</div>
+                  </div>
+                  <div className="rounded-lg p-2" style={{ background: dk ? 'rgba(192,96,96,0.06)' : 'rgba(192,96,96,0.04)' }}>
+                    <div style={{ color: '#C06060' }}>Attacks</div>
+                    <div className="text-lg font-bold font-mono" style={{ color: '#C06060' }}>{session.totalBuilds - 1}</div>
                   </div>
                 </div>
               </div>
@@ -719,11 +695,11 @@ export function RavelUI() {
                   }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Target className="w-4 h-4" style={{ color: dk ? '#C8A882' : '#8B7355' }} />
-                    <span className="text-xs font-mono tracking-wider uppercase" style={{ color: dk ? '#C8A882' : '#8B7355' }}>HUNT {huntLabel}</span>
+                    <span className="text-xs font-mono tracking-wider uppercase" style={{ color: dk ? '#C8A882' : '#8B7355' }}>ROUND {huntLabel}</span>
                     {building && (
                       <span className="ml-auto text-[10px] font-mono flex items-center gap-1" style={{ color: dk ? '#C8A882' : '#8B7355' }}>
                         <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: dk ? '#C8A882' : '#8B7355' }} />
-                        PATCHING
+                        {initialBuild ? 'BUILDING' : 'ADAPTING'}
                       </span>
                     )}
                   </div>
@@ -734,7 +710,7 @@ export function RavelUI() {
                   </div>
                   {currentHunt.oracle && (
                     <div className="mt-3 p-2 rounded-lg" style={{ background: dk ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.03)', border: '1px solid var(--border)' }}>
-                      <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Oracle</div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>How we know</div>
                       <div className="text-xs" style={{ color: 'var(--muted)' }}>{currentHunt.oracle.description}</div>
                     </div>
                   )}
@@ -743,17 +719,17 @@ export function RavelUI() {
 
               <div className="rounded-xl p-4" style={{ background: dk ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', border: '1px solid var(--border)' }}>
                 <div className="text-[10px] font-mono uppercase tracking-[0.15em] mb-2" style={{ color: 'var(--muted)' }}>How it works</div>
-                <ol className="text-xs space-y-1.5 list-decimal list-inside" style={{ color: 'var(--muted)' }}>
-                  <li>Play v{session.currentVersion} while AI builds v{nextVersion}.</li>
-                  <li>Trigger the failure &mdash; your input becomes the trace.</li>
-                  <li>Replay the <span style={{ color: 'var(--fg)' }}>same attack</span> on both builds.</li>
-                  <li>Oracle proves old fails + fix is present.</li>
-                  <li>The AI&apos;s next build has to survive you.</li>
-                </ol>
+                <div className="text-xs space-y-2" style={{ color: 'var(--muted)' }}>
+                  <p>GPT-4o builds a game in front of you.</p>
+                  <p>You play it. Find a weakness. Click <span style={{ color: '#C06060', fontWeight: 600 }}>I BROKE IT</span>.</p>
+                  <p>The AI sees your attack and rebuilds the game.</p>
+                  <p>You try the <span style={{ color: 'var(--fg)' }}>same attack</span> on the new version.</p>
+                  <p className="pt-1 font-medium" style={{ color: dk ? '#C8A882' : '#8B7355' }}>Every build has to survive you.</p>
+                </div>
               </div>
 
               <button onClick={handleReset} className="w-full py-2 text-xs flex items-center justify-center gap-2 rounded-lg transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--muted)' }}>
-                <RotateCcw className="w-3 h-3" /> New Session
+                <RotateCcw className="w-3 h-3" /> New Game
               </button>
             </div>
           </div>

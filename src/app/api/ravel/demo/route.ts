@@ -25,6 +25,8 @@ export async function POST() {
     sessionId: session.id,
     title: session.gameTitle,
     version: build.version,
+    versionBase: session.versionBase,
+    huntBase: session.huntBase,
     huntNumber: seed.huntBase + 1,
     html: build.html,
     build: { id: build.id, version: build.version },

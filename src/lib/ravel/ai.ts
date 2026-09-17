@@ -6,18 +6,29 @@ let _client: OpenAI | null = null;
 
 function getClient() {
   if (!_client) {
-    _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+    const isGemini = !!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY;
+    _client = new OpenAI({
+      apiKey,
+      baseURL: isGemini ? 'https://generativelanguage.googleapis.com/v1beta/openai/' : undefined,
+    });
   }
   return _client;
 }
 
+export function defaultModel(): string {
+  return process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY
+    ? 'gemini-2.5-flash'
+    : 'gpt-4o';
+}
+
 const PATCH_TIMEOUT_MS = 90_000;
 
-export async function generateGame(title: string): Promise<{ code: string; html: string }> {
+export async function generateGame(title: string, model?: string): Promise<{ code: string; html: string }> {
   const client = getClient();
 
   const response = await client.chat.completions.create({
-    model: 'gpt-4o',
+    model: model || defaultModel(),
     messages: [
       {
         role: 'system',
@@ -122,25 +133,20 @@ Inspect your new fix against that failure specifically before answering.`
     : '';
 
   const response = await client.chat.completions.create({
-    model: 'gpt-4o',
+    model: defaultModel(),
     messages: [
       {
         role: 'system',
-        content: `You are a game patcher. You receive a game's JavaScript code and a bug report with reproduction steps.
+        content: `You are an AI game logic patcher. You are ONLY allowed to rewrite one specific function:
 
-Your job:
-1. Analyze the code to understand the bug
-2. Fix the bug with minimal changes
-3. Preserve all other game functionality
-4. Explain what you changed and why
+window.enemyDecision = function(enemy, state, memory) { ... }
 
 RULES:
-1. Return ONLY the patched JavaScript code
-2. Keep the same game structure and style
-3. Do not add new features
-4. Do not change the game's visual style
-5. Make the fix targeted and precise
-6. After the code, add a comment: // PATCH_EXPLANATION: <your explanation>`
+1. Return ONLY the replacement JavaScript code for that function.
+2. Your code must start with "window.enemyDecision = function(enemy, state, memory) {" and end with "};".
+3. The function must return { targetX: number, targetY: number, isPlayer: boolean }.
+4. state has { enemies, decoys, player }.
+5. After the function code, add a comment exactly formatted like this: // PATCH_EXPLANATION: <your explanation>`
       },
       {
         role: 'user',
@@ -160,11 +166,11 @@ REPRODUCTION STEPS:
 ${reproductionSteps.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 ${oracleBlock}
 ${feedbackBlock}
-Fix this bug. Return the patched code.`
+Fix this bug by rewriting window.enemyDecision. Return ONLY the new function.`
       }
     ],
     temperature: 0.3,
-    max_tokens: 3000,
+    max_tokens: 1500,
   }, { signal: AbortSignal.timeout(PATCH_TIMEOUT_MS) });
 
   const rawResponse = response.choices[0]?.message?.content || '';
@@ -174,7 +180,7 @@ Fix this bug. Return the patched code.`
   }
 
   const explanationMatch = rawResponse.match(/\/\/ PATCH_EXPLANATION:\s*(.+)/);
-  const explanation = explanationMatch ? explanationMatch[1].trim() : 'Bug fixed';
+  const explanation = explanationMatch ? explanationMatch[1].trim() : 'Enemy targeting logic updated';
 
   const rawPatchedCode = rawResponse
     .replace(/```javascript\n?/g, '')
@@ -183,11 +189,16 @@ Fix this bug. Return the patched code.`
     .replace(/\/\/ PATCH_EXPLANATION:.*/g, '')
     .trim();
 
-  if (rawPatchedCode.length < 100) {
+  if (rawPatchedCode.length < 20) {
     throw new Error('AI returned invalid or empty code');
   }
 
-  const code = injectRecordingHarness(rawPatchedCode);
+  const replacedCode = originalCode.replace(
+    /window\.enemyDecision\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?^\s*\};\n/m,
+    rawPatchedCode + '\n'
+  );
+
+  const code = injectRecordingHarness(replacedCode);
 
   return {
     code,

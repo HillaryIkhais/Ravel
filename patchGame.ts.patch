@@ -1,0 +1,69 @@
+--- src/lib/ravel/ai.ts
++++ src/lib/ravel/ai.ts
+@@ -102,6 +102,6 @@
+     oracle?: OracleCondition;
+     previousFailure?: string;
+   }): Promise<{ code: string; explanation: string }> {
+     const {
+       originalCode,
+       failureDescription,
+@@ -138,15 +138,14 @@
+       messages: [
+         {
+           role: 'system',
+-          content: `You are a game patcher. You receive a game's JavaScript code and a bug report with reproduction steps.
+-  
+-  Your job:
+-  1. Analyze the code to understand the bug
+-  2. Fix the bug with minimal changes
+-  3. Preserve all other game functionality
+-  4. Explain what you changed and why
+-  
+-  RULES:
+-  1. Return ONLY the patched JavaScript code
+-  2. Keep the same game structure and style
+-  3. Do not add new features
+-  4. Do not change the game's visual style
+-  5. Make the fix targeted and precise
+-  6. After the code, add a comment: // PATCH_EXPLANATION: <your explanation>`
++          content: `You are an AI game logic patcher. You are ONLY allowed to rewrite one specific function:
++
++window.enemyDecision = function(enemy, state, memory) { ... }
++
++RULES:
++1. Return ONLY the replacement JavaScript code for that function.
++2. Your code must start with "window.enemyDecision = function(enemy, state, memory) {" and end with "};".
++3. The function must return { targetX: number, targetY: number, isPlayer: boolean }.
++4. state has { enemies, decoys, player }.
++5. After the function code, add a comment exactly formatted like this: // PATCH_EXPLANATION: <your explanation>`
+         },
+         {
+           role: 'user',
+@@ -172,7 +171,7 @@
+   ${reproductionSteps.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+   ${oracleBlock}
+   ${feedbackBlock}
+-  Fix this bug. Return the patched code.`
++  Fix this bug by rewriting window.enemyDecision. Return ONLY the new function.`
+         }
+       ],
+       temperature: 0.3,
+@@ -197,11 +196,14 @@
+       .replace(/\/\/ PATCH_EXPLANATION:.*/g, '')
+       .trim();
+   
+-    if (rawPatchedCode.length < 100) {
++    if (rawPatchedCode.length < 20) {
+       throw new Error('AI returned invalid or empty code');
+     }
+   
+-    const code = injectRecordingHarness(rawPatchedCode);
++    const replacedCode = originalCode.replace(
++      /window\.enemyDecision\s*=\s*function\s*\([^)]*\)\s*\{[\s\S]*?^\s*\};/m,
++      rawPatchedCode
++    );
++
++    const code = injectRecordingHarness(replacedCode);
+   
+     return {
+       code,

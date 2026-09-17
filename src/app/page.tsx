@@ -1,5 +1,5 @@
-import { RavelUI } from '@/components/ravel/RavelUI';
+import { RavelLanding } from '@/components/ravel/RavelLanding';
 
 export default function Home() {
-  return <RavelUI />;
+  return <RavelLanding />;
 }

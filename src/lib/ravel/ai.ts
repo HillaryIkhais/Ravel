@@ -18,7 +18,7 @@ function getClient() {
 
 export function defaultModel(): string {
   return process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY
-    ? 'gemini-2.5-flash'
+    ? 'gemini-1.5-flash'
     : 'gpt-4o';
 }
 

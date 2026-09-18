@@ -180,6 +180,7 @@ function GridPlane({ dark }: { dark: boolean }) {
 interface SceneProps {
   dark: boolean;
   phase: string;
+  className?: string;
 }
 
 function SceneContent({ dark, phase }: SceneProps) {
@@ -239,9 +240,9 @@ function SceneContent({ dark, phase }: SceneProps) {
   );
 }
 
-export function Scene3D({ dark, phase }: SceneProps) {
+export function Scene3D({ dark, phase, className }: SceneProps) {
   return (
-    <div className="fixed inset-0" style={{ zIndex: 0 }}>
+    <div className={`fixed inset-0 ${className || ''}`} style={{ zIndex: 0 }}>
       <Canvas
         camera={{ position: [0, 0, 6], fov: 50 }}
         dpr={[1, 1.5]}
